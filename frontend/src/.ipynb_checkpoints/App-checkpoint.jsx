@@ -4,9 +4,6 @@ import {
   MapContainer,
   TileLayer,
   GeoJSON,
-  CircleMarker,
-  Tooltip,
-  Popup,
   useMap,
 } from "react-leaflet";
 
@@ -15,26 +12,22 @@ import L from "leaflet";
 import "leaflet/dist/leaflet.css";
 import "./index.css";
 
-
 // =========================================================
 // API
 // =========================================================
 
 const API = "http://127.0.0.1:8000/api/gis";
 
-
 // =========================================================
 // PROPERTY HELPER
 // =========================================================
 
 function getProperty(properties, names) {
-
   if (!properties) return "";
 
   const keys = Object.keys(properties);
 
   for (const name of names) {
-
     const key = keys.find(
       (k) =>
         String(k).toLowerCase() ===
@@ -49,17 +42,12 @@ function getProperty(properties, names) {
   return "";
 }
 
-
 // =========================================================
 // NORMALIZE
 // =========================================================
 
 function normalizeCode(value) {
-
-  if (
-    value === null ||
-    value === undefined
-  ) {
+  if (value === null || value === undefined) {
     return "";
   }
 
@@ -70,221 +58,87 @@ function normalizeCode(value) {
   return str.replace(/^0+/, "") || "0";
 }
 
-
 // =========================================================
 // STATE
 // =========================================================
 
 function getStateName(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "STNAME",
-      "ST_NAME",
-      "state_name",
-      "State_Name",
-      "STATE"
-    ]
-  );
+  return getProperty(feature?.properties, [
+    "STNAME",
+    "ST_NAME",
+    "state_name",
+    "State_Name",
+    "STATE",
+  ]);
 }
-
 
 function getStateCode(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "STCODE11",
-      "ST_CODE",
-      "State_LGD",
-      "state_code"
-    ]
-  );
+  return getProperty(feature?.properties, [
+    "STCODE11",
+    "ST_CODE",
+    "State_LGD",
+    "state_code",
+  ]);
 }
-
 
 // =========================================================
 // DISTRICT
 // =========================================================
 
 function getDistrictName(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "dtname",
-      "DTNAME",
-      "DIST_NAME",
-      "dtname11",
-      "district",
-      "district_name"
-    ]
-  );
+  return getProperty(feature?.properties, [
+    "dtname",
+    "DTNAME",
+    "DIST_NAME",
+    "dtname11",
+    "district",
+    "district_name",
+  ]);
 }
-
 
 function getDistrictCode(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "dtcode11",
-      "DT_CODE",
-      "Dist_LGD",
-      "dist_lgd",
-      "district_code"
-    ]
-  );
+  return getProperty(feature?.properties, [
+    "dtcode11",
+    "DT_CODE",
+    "Dist_LGD",
+    "dist_lgd",
+    "district_code",
+  ]);
 }
-
 
 // =========================================================
 // ASSEMBLY
 // =========================================================
 
 function getAssemblyName(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "AC_NAME",
-      "ac_name",
-      "assembly",
-      "assembly_name"
-    ]
-  );
+  return getProperty(feature?.properties, [
+    "AC_NAME",
+    "ac_name",
+    "assembly",
+    "assembly_name",
+  ]);
 }
-
 
 function getAssemblyNumber(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "AC_NO",
-      "ac_no",
-      "acno",
-      "ACNO",
-      "assembly_no",
-      "assembly_number"
-    ]
-  );
+  return getProperty(feature?.properties, [
+    "AC_NO",
+    "ac_no",
+    "acno",
+    "ACNO",
+    "assembly_no",
+    "assembly_number",
+  ]);
 }
-
 
 function getAssemblyDistrictCode(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "dtcode11",
-      "DT_CODE",
-      "dist_lgd",
-      "Dist_LGD",
-      "district_code"
-    ]
-  );
+  return getProperty(feature?.properties, [
+    "dtcode11",
+    "DT_CODE",
+    "dist_lgd",
+    "Dist_LGD",
+    "district_code",
+  ]);
 }
-
-
-// =========================================================
-// VILLAGE
-// =========================================================
-
-function getVillageName(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "vilname11",
-      "vilnam_soi",
-      "search_village",
-      "VILNAME11",
-      "VIL_NAME",
-      "village_name",
-      "village",
-      "Village",
-      "Village_Name"
-    ]
-  );
-}
-
-
-function getVillageDistrictCode(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "dtcode11",
-      "DT_CODE",
-      "dist_lgd",
-      "Dist_LGD",
-      "district_code"
-    ]
-  );
-}
-
-
-function getVillageAssemblyNumber(feature) {
-
-  return getProperty(
-    feature?.properties,
-    [
-      "ac_no",
-      "AC_NO",
-      "acno",
-      "ACNO",
-      "assembly_no",
-      "assembly_number"
-    ]
-  );
-}
-
-
-// =========================================================
-// BOOTH PROPERTY HELPERS
-// =========================================================
-
-function getBoothNumber(booth) {
-
-  return (
-    booth?.booth_no ??
-    getProperty(
-      booth?.properties,
-      [
-        "booth_no",
-        "booth_number",
-        "booth",
-        "part_no",
-        "part_number",
-        "Booth_No",
-        "PART_NO"
-      ]
-    )
-  );
-}
-
-
-function getBoothName(booth) {
-
-  return (
-    booth?.booth_name ??
-    getProperty(
-      booth?.properties,
-      [
-        "booth_name",
-        "polling_station",
-        "polling_station_name",
-        "location",
-        "booth_location",
-        "Booth_Name",
-        "PS_NAME"
-      ]
-    )
-  );
-}
-
 
 // =========================================================
 // SEARCH SELECT
@@ -298,73 +152,44 @@ function SearchSelect({
   onChange,
   disabled = false,
 }) {
+  const [open, setOpen] = useState(false);
+  const [search, setSearch] = useState("");
 
-  const [open, setOpen] =
-    useState(false);
-
-  const [search, setSearch] =
-    useState("");
-
-
-  const filteredOptions =
-    useMemo(() => {
-
-      if (!search.trim()) {
-        return options;
-      }
-
-      return options.filter(
-        (option) =>
-          String(option)
-            .toLowerCase()
-            .includes(
-              search.toLowerCase()
-            )
-      );
-
-    }, [
-      options,
-      search
-    ]);
-
-
-  useEffect(() => {
-
-    if (disabled) {
-
-      setOpen(false);
-      setSearch("");
-
+  const filteredOptions = useMemo(() => {
+    if (!search.trim()) {
+      return options;
     }
 
+    return options.filter((option) =>
+      String(option)
+        .toLowerCase()
+        .includes(search.toLowerCase())
+    );
+  }, [options, search]);
+
+  useEffect(() => {
+    if (disabled) {
+      setOpen(false);
+      setSearch("");
+    }
   }, [disabled]);
 
-
   return (
-
     <div className="select-wrapper">
-
       <label className="field-label">
         {label}
       </label>
 
       <div
         className={`custom-select ${
-          disabled
-            ? "disabled"
-            : ""
+          disabled ? "disabled" : ""
         }`}
         onClick={() => {
-
           if (!disabled) {
-            setOpen(
-              (prev) => !prev
-            );
+            setOpen((prev) => !prev);
           }
-
         }}
       >
-
         <div
           className={
             value
@@ -378,21 +203,14 @@ function SearchSelect({
         <span className="select-arrow">
           {open ? "⌃" : "⌄"}
         </span>
-
       </div>
 
-
       {open && !disabled && (
-
         <div
           className="select-dropdown"
-          onClick={(e) =>
-            e.stopPropagation()
-          }
+          onClick={(e) => e.stopPropagation()}
         >
-
           <div className="search-box">
-
             <span>⌕</span>
 
             <input
@@ -400,73 +218,47 @@ function SearchSelect({
               placeholder={`Search ${label.toLowerCase()}...`}
               value={search}
               onChange={(e) =>
-                setSearch(
-                  e.target.value
-                )
+                setSearch(e.target.value)
               }
             />
-
           </div>
 
-
           <div className="options-list">
-
             {filteredOptions.length === 0 ? (
-
               <div className="no-option">
                 No results found
               </div>
-
             ) : (
+              filteredOptions.map((option) => (
+                <div
+                  key={String(option)}
+                  className={`option ${
+                    String(option) ===
+                    String(value)
+                      ? "active-option"
+                      : ""
+                  }`}
+                  onClick={() => {
+                    onChange(option);
+                    setSearch("");
+                    setOpen(false);
+                  }}
+                >
+                  <span>{option}</span>
 
-              filteredOptions.map(
-                (option) => (
-
-                  <div
-                    key={String(option)}
-                    className={`option ${
-                      String(option) ===
-                      String(value)
-                        ? "active-option"
-                        : ""
-                    }`}
-                    onClick={() => {
-
-                      onChange(option);
-
-                      setSearch("");
-
-                      setOpen(false);
-
-                    }}
-                  >
-
-                    <span>
-                      {option}
-                    </span>
-
-                    {String(option) ===
-                      String(value) && (
-                      <span>✓</span>
-                    )}
-
-                  </div>
-
-                )
-              )
-
+                  {String(option) ===
+                    String(value) && (
+                    <span>✓</span>
+                  )}
+                </div>
+              ))
             )}
-
           </div>
-
         </div>
-
       )}
-
     </div>
   );
 }
-
 
 // =========================================================
 // MAP AUTO ZOOM
@@ -474,31 +266,23 @@ function SearchSelect({
 
 function MapController({
   selectedFeature,
-  level
+  level,
 }) {
-
   const map = useMap();
 
-
   useEffect(() => {
-
     if (!selectedFeature) {
       return;
     }
 
     try {
+      const layer = L.geoJSON(
+        selectedFeature
+      );
 
-      const layer =
-        L.geoJSON(
-          selectedFeature
-        );
-
-      const bounds =
-        layer.getBounds();
-
+      const bounds = layer.getBounds();
 
       if (bounds.isValid()) {
-
         let maxZoom = 7;
 
         if (level === "state") {
@@ -513,53 +297,35 @@ function MapController({
           maxZoom = 12;
         }
 
-        if (level === "village") {
-          maxZoom = 16;
-        }
+        map.flyToBounds(bounds, {
+          paddingTopLeft: [40, 40],
 
+          paddingBottomRight: [
+            420,
+            40,
+          ],
 
-        map.flyToBounds(
-          bounds,
-          {
-            paddingTopLeft: [
-              40,
-              40
-            ],
+          duration: 1.15,
 
-            paddingBottomRight: [
-              420,
-              40
-            ],
+          easeLinearity: 0.2,
 
-            duration: 1.15,
-
-            easeLinearity: 0.2,
-
-            maxZoom
-          }
-        );
-
+          maxZoom,
+        });
       }
-
     } catch (error) {
-
       console.error(
         "Map zoom error:",
         error
       );
-
     }
-
   }, [
     selectedFeature,
     level,
-    map
+    map,
   ]);
-
 
   return null;
 }
-
 
 // =========================================================
 // ASSEMBLY COLORS
@@ -581,66 +347,24 @@ const ASSEMBLY_COLORS = [
   "#0d9488",
   "#65a30d",
   "#c026d3",
-  "#0284c7"
+  "#0284c7",
 ];
 
+function getAssemblyColor(assemblyNumber) {
+  const number = parseInt(
+    assemblyNumber,
+    10
+  );
 
-function getAssemblyColor(
-  assemblyNumber
-) {
-
-  const number =
-    parseInt(
-      assemblyNumber,
-      10
-    );
-
-  if (
-    Number.isNaN(number)
-  ) {
+  if (Number.isNaN(number)) {
     return ASSEMBLY_COLORS[0];
   }
 
   return ASSEMBLY_COLORS[
     Math.abs(number) %
-    ASSEMBLY_COLORS.length
+      ASSEMBLY_COLORS.length
   ];
 }
-
-
-// =========================================================
-// VILLAGE COLORS
-// =========================================================
-
-function getVillageColor(
-  feature,
-  index
-) {
-
-  const name =
-    getVillageName(feature) ||
-    "";
-
-  let hash = 0;
-
-  for (
-    let i = 0;
-    i < name.length;
-    i++
-  ) {
-
-    hash =
-      name.charCodeAt(i) +
-      ((hash << 5) - hash);
-
-  }
-
-  return ASSEMBLY_COLORS[
-    Math.abs(hash + index) %
-    ASSEMBLY_COLORS.length
-  ];
-}
-
 
 // =========================================================
 // MAIN APP
@@ -660,13 +384,6 @@ export default function App() {
 
   const [assemblies, setAssemblies] =
     useState(null);
-
-  const [villages, setVillages] =
-    useState(null);
-
-  const [boothLocations, setBoothLocations] =
-    useState([]);
-
 
   // =======================================================
   // SELECTION
@@ -690,12 +407,8 @@ export default function App() {
   const [selectedAssemblyNumber, setSelectedAssemblyNumber] =
     useState("");
 
-  const [selectedVillage, setSelectedVillage] =
-    useState("");
-
-
   // =======================================================
-  // FEATURES
+  // SELECTED FEATURES
   // =======================================================
 
   const [selectedStateFeature, setSelectedStateFeature] =
@@ -707,31 +420,12 @@ export default function App() {
   const [selectedAssemblyFeature, setSelectedAssemblyFeature] =
     useState(null);
 
-  const [selectedVillageFeature, setSelectedVillageFeature] =
-    useState(null);
-
-
-  // =======================================================
-  // BOOTH UI
-  // =======================================================
-
-  const [selectedLocation, setSelectedLocation] =
-    useState(null);
-
-  const [selectedBooth, setSelectedBooth] =
-    useState(null);
-
-  const [boothAnalysis, setBoothAnalysis] =
-    useState(null);
-
-
   // =======================================================
   // MAP
   // =======================================================
 
   const [mapLevel, setMapLevel] =
     useState("india");
-
 
   // =======================================================
   // LOADING
@@ -740,20 +434,13 @@ export default function App() {
   const [loading, setLoading] =
     useState(true);
 
-  const [boothLoading, setBoothLoading] =
-    useState(false);
-
-
   // =======================================================
   // LOAD STATES
   // =======================================================
 
   useEffect(() => {
-
     async function loadStates() {
-
       try {
-
         const response =
           await fetch(
             `${API}/states`
@@ -769,81 +456,53 @@ export default function App() {
           await response.json();
 
         setStates(data);
-
       } catch (error) {
-
         console.error(
           "State loading error:",
           error
         );
-
       } finally {
-
         setLoading(false);
-
       }
-
     }
 
     loadStates();
-
   }, []);
-
 
   // =======================================================
   // LOAD UP GIS
   // =======================================================
 
   useEffect(() => {
-
     async function loadUPData() {
-
       try {
-
         const [
           districtResponse,
           assemblyResponse,
-          villageResponse
-        ] =
-          await Promise.all([
+        ] = await Promise.all([
+          fetch(
+            `${API}/districts/uttar-pradesh`
+          ),
 
-            fetch(
-              `${API}/districts/uttar-pradesh`
-            ),
-
-            fetch(
-              `${API}/assemblies/uttar-pradesh`
-            ),
-
-            fetch(
-              `${API}/villages/uttar-pradesh`
-            )
-
-          ]);
-
+          fetch(
+            `${API}/assemblies/uttar-pradesh`
+          ),
+        ]);
 
         if (
           !districtResponse.ok ||
-          !assemblyResponse.ok ||
-          !villageResponse.ok
+          !assemblyResponse.ok
         ) {
-
           throw new Error(
             "Failed to load UP GIS data"
           );
-
         }
-
 
         const districtData =
           await districtResponse.json();
 
         const assemblyData =
           await assemblyResponse.json();
-
-        const villageData =
-          await villageResponse.json();
-
 
         setDistricts(
           districtData
@@ -852,329 +511,128 @@ export default function App() {
         setAssemblies(
           assemblyData
         );
-
-        setVillages(
-          villageData
-        );
-
       } catch (error) {
-
         console.error(
           "UP GIS loading error:",
           error
         );
-
       }
-
     }
 
     loadUPData();
-
   }, []);
 
+  // =======================================================
+  // IS SELECTED STATE UTTAR PRADESH?
+  // =======================================================
+
+  const isUttarPradesh =
+    selectedState
+      ?.trim()
+      .toLowerCase() ===
+    "uttar pradesh";
 
   // =======================================================
   // STATE OPTIONS
   // =======================================================
 
-  const stateOptions =
-    useMemo(() => {
+  const stateOptions = useMemo(() => {
+    if (!states?.features) {
+      return [];
+    }
 
-      if (!states?.features) {
-        return [];
-      }
-
-      return [
-        ...new Set(
-          states.features
-            .map(getStateName)
-            .filter(Boolean)
-        )
-      ].sort();
-
-    }, [states]);
-
+    return [
+      ...new Set(
+        states.features
+          .map(getStateName)
+          .filter(Boolean)
+      ),
+    ].sort();
+  }, [states]);
 
   // =======================================================
   // DISTRICT OPTIONS
+  // ONLY FOR UTTAR PRADESH
   // =======================================================
 
-  const districtOptions =
-    useMemo(() => {
+  const districtOptions = useMemo(() => {
+    if (
+      !isUttarPradesh ||
+      !districts?.features
+    ) {
+      return [];
+    }
 
-      if (!districts?.features) {
-        return [];
-      }
-
-      return [
-        ...new Set(
-          districts.features
-            .map(getDistrictName)
-            .filter(Boolean)
-        )
-      ].sort();
-
-    }, [districts]);
-
+    return [
+      ...new Set(
+        districts.features
+          .map(getDistrictName)
+          .filter(Boolean)
+      ),
+    ].sort();
+  }, [
+    districts,
+    isUttarPradesh,
+  ]);
 
   // =======================================================
   // ASSEMBLY OPTIONS
   // =======================================================
 
-  const assemblyOptions =
-    useMemo(() => {
+  const assemblyOptions = useMemo(() => {
+    if (
+      !isUttarPradesh ||
+      !assemblies?.features ||
+      !selectedDistrictCode
+    ) {
+      return [];
+    }
 
-      if (
-        !assemblies?.features ||
-        !selectedDistrictCode
-      ) {
-        return [];
-      }
-
-
-      const filtered =
-        assemblies.features.filter(
-          (feature) => {
-
-            return (
-              normalizeCode(
-                getAssemblyDistrictCode(
-                  feature
-                )
-              ) ===
-              normalizeCode(
-                selectedDistrictCode
-              )
-            );
-
-          }
-        );
-
-
-      return [
-        ...new Map(
-
-          filtered.map(
-            (feature) => {
-
-              const acNo =
-                getAssemblyNumber(
-                  feature
-                );
-
-              const name =
-                getAssemblyName(
-                  feature
-                );
-
-              return [
-                String(acNo),
-                name
-              ];
-
-            }
-          )
-
-        ).values()
-
-      ]
-        .filter(Boolean)
-        .sort();
-
-    }, [
-      assemblies,
-      selectedDistrictCode
-    ]);
-
-
-  // =======================================================
-  // VISIBLE VILLAGES
-  // =======================================================
-
-  const visibleVillages =
-    useMemo(() => {
-
-      if (
-        !villages?.features ||
-        !selectedDistrictCode ||
-        !selectedAssemblyNumber
-      ) {
-        return [];
-      }
-
-
-      return villages.features.filter(
+    const filtered =
+      assemblies.features.filter(
         (feature) => {
-
           return (
-
             normalizeCode(
-              getVillageDistrictCode(
+              getAssemblyDistrictCode(
                 feature
               )
             ) ===
             normalizeCode(
               selectedDistrictCode
             )
-
-            &&
-
-            normalizeCode(
-              getVillageAssemblyNumber(
-                feature
-              )
-            ) ===
-            normalizeCode(
-              selectedAssemblyNumber
-            )
-
           );
-
         }
       );
 
-    }, [
-      villages,
-      selectedDistrictCode,
-      selectedAssemblyNumber
-    ]);
+    return [
+      ...new Map(
+        filtered.map(
+          (feature) => {
+            const acNo =
+              getAssemblyNumber(
+                feature
+              );
 
+            const name =
+              getAssemblyName(
+                feature
+              );
 
-  // =======================================================
-  // VILLAGE OPTIONS
-  // =======================================================
-
-  const villageOptions =
-    useMemo(() => {
-
-      return [
-        ...new Set(
-          visibleVillages
-            .map(getVillageName)
-            .filter(Boolean)
+            return [
+              String(acNo),
+              name,
+            ];
+          }
         )
-      ].sort();
-
-    }, [visibleVillages]);
-
-
-  // =======================================================
-  // LOAD BOOTHS
-  // =======================================================
-
-  async function loadBooths(
-    villageName
-  ) {
-
-    try {
-
-      setBoothLoading(true);
-
-      setSelectedLocation(null);
-      setSelectedBooth(null);
-      setBoothAnalysis(null);
-
-
-      const response =
-        await fetch(
-          `${API}/booth-locations?village=${encodeURIComponent(
-            villageName
-          )}`
-        );
-
-
-      if (!response.ok) {
-        throw new Error(
-          "Failed to load booth locations"
-        );
-      }
-
-
-      const data =
-        await response.json();
-
-
-      setBoothLocations(
-        data?.locations || []
-      );
-
-    } catch (error) {
-
-      console.error(
-        "Booth loading error:",
-        error
-      );
-
-      setBoothLocations([]);
-
-    } finally {
-
-      setBoothLoading(false);
-
-    }
-
-  }
-
-
-  // =======================================================
-  // LOAD BOOTH ANALYSIS
-  // =======================================================
-
-  async function loadBoothAnalysis(
-    booth
-  ) {
-
-    setSelectedBooth(
-      booth
-    );
-
-    setBoothAnalysis(null);
-
-
-    const boothNo =
-      getBoothNumber(
-        booth
-      );
-
-
-    if (!boothNo) {
-      return;
-    }
-
-
-    try {
-
-      const response =
-        await fetch(
-          `${API}/booth/${encodeURIComponent(
-            boothNo
-          )}/analysis`
-        );
-
-
-      if (
-        response.ok
-      ) {
-
-        const data =
-          await response.json();
-
-        setBoothAnalysis(
-          data
-        );
-
-      }
-
-    } catch (error) {
-
-      console.log(
-        "Booth analysis endpoint not available yet."
-      );
-
-    }
-
-  }
-
+      ).values(),
+    ]
+      .filter(Boolean)
+      .sort();
+  }, [
+    assemblies,
+    selectedDistrictCode,
+    isUttarPradesh,
+  ]);
 
   // =======================================================
   // STATE CHANGE
@@ -1183,7 +641,6 @@ export default function App() {
   function handleStateChange(
     stateName
   ) {
-
     const feature =
       states?.features?.find(
         (item) =>
@@ -1197,12 +654,19 @@ export default function App() {
             .trim()
       );
 
-
     if (!feature) return;
 
+    const normalizedState =
+      String(stateName)
+        .trim();
+
+    const isUP =
+      normalizedState
+        .toLowerCase() ===
+      "uttar pradesh";
 
     setSelectedState(
-      stateName
+      normalizedState
     );
 
     setSelectedStateCode(
@@ -1211,15 +675,12 @@ export default function App() {
       )
     );
 
-
+    // Always clear lower levels
     setSelectedDistrict("");
     setSelectedDistrictCode("");
 
     setSelectedAssembly("");
     setSelectedAssemblyNumber("");
-
-    setSelectedVillage("");
-
 
     setSelectedStateFeature(
       feature
@@ -1233,24 +694,13 @@ export default function App() {
       null
     );
 
-    setSelectedVillageFeature(
-      null
-    );
+    setMapLevel("state");
 
-
-    setBoothLocations([]);
-
-    setSelectedLocation(null);
-    setSelectedBooth(null);
-    setBoothAnalysis(null);
-
-
-    setMapLevel(
-      "state"
-    );
-
+    // For non-UP states, no district layer
+    if (!isUP) {
+      return;
+    }
   }
-
 
   // =======================================================
   // DISTRICT CHANGE
@@ -1259,6 +709,11 @@ export default function App() {
   function handleDistrictChange(
     districtName
   ) {
+    // Safety check:
+    // district data belongs only to UP
+    if (!isUttarPradesh) {
+      return;
+    }
 
     const feature =
       districts?.features?.find(
@@ -1273,9 +728,7 @@ export default function App() {
             .trim()
       );
 
-
     if (!feature) return;
-
 
     setSelectedDistrict(
       districtName
@@ -1287,39 +740,19 @@ export default function App() {
       )
     );
 
-
     setSelectedAssembly("");
     setSelectedAssemblyNumber("");
-
-    setSelectedVillage("");
-
-
-    setSelectedAssemblyFeature(
-      null
-    );
-
-    setSelectedVillageFeature(
-      null
-    );
-
 
     setSelectedDistrictFeature(
       feature
     );
 
-
-    setBoothLocations([]);
-    setSelectedLocation(null);
-    setSelectedBooth(null);
-    setBoothAnalysis(null);
-
-
-    setMapLevel(
-      "district"
+    setSelectedAssemblyFeature(
+      null
     );
 
+    setMapLevel("district");
   }
-
 
   // =======================================================
   // ASSEMBLY CHANGE
@@ -1328,47 +761,43 @@ export default function App() {
   function handleAssemblyChange(
     assemblyName
   ) {
+    if (
+      !isUttarPradesh ||
+      !selectedDistrictCode
+    ) {
+      return;
+    }
 
     const feature =
       assemblies?.features?.find(
         (item) => {
-
           return (
-
             normalizeCode(
               getAssemblyDistrictCode(
                 item
               )
             ) ===
-            normalizeCode(
-              selectedDistrictCode
-            )
-
-            &&
-
+              normalizeCode(
+                selectedDistrictCode
+              ) &&
             String(
               getAssemblyName(item)
             )
               .toLowerCase()
               .trim() ===
-            String(assemblyName)
-              .toLowerCase()
-              .trim()
-
+              String(assemblyName)
+                .toLowerCase()
+                .trim()
           );
-
         }
       );
 
-
     if (!feature) return;
-
 
     const assemblyNumber =
       getAssemblyNumber(
         feature
       );
-
 
     setSelectedAssembly(
       assemblyName
@@ -1378,77 +807,12 @@ export default function App() {
       String(assemblyNumber)
     );
 
-    setSelectedVillage("");
-
-
     setSelectedAssemblyFeature(
       feature
     );
 
-    setSelectedVillageFeature(
-      null
-    );
-
-
-    setBoothLocations([]);
-    setSelectedLocation(null);
-    setSelectedBooth(null);
-    setBoothAnalysis(null);
-
-
-    setMapLevel(
-      "assembly"
-    );
-
+    setMapLevel("assembly");
   }
-
-
-  // =======================================================
-  // VILLAGE CHANGE
-  // =======================================================
-
-  async function handleVillageChange(
-    villageName
-  ) {
-
-    const feature =
-      visibleVillages.find(
-        (item) =>
-          String(
-            getVillageName(item)
-          )
-            .toLowerCase()
-            .trim() ===
-          String(villageName)
-            .toLowerCase()
-            .trim()
-      );
-
-
-    if (!feature) return;
-
-
-    setSelectedVillage(
-      villageName
-    );
-
-
-    setSelectedVillageFeature(
-      feature
-    );
-
-
-    setMapLevel(
-      "village"
-    );
-
-
-    await loadBooths(
-      villageName
-    );
-
-  }
-
 
   // =======================================================
   // MAP CLICKS
@@ -1457,24 +821,23 @@ export default function App() {
   function handleStateClick(
     feature
   ) {
-
     const name =
-      getStateName(
-        feature
-      );
+      getStateName(feature);
 
     if (name) {
       handleStateChange(
         name
       );
     }
-
   }
-
 
   function handleDistrictClick(
     feature
   ) {
+    // District click is valid only for UP
+    if (!isUttarPradesh) {
+      return;
+    }
 
     const name =
       getDistrictName(
@@ -1486,13 +849,14 @@ export default function App() {
         name
       );
     }
-
   }
-
 
   function handleAssemblyClick(
     feature
   ) {
+    if (!isUttarPradesh) {
+      return;
+    }
 
     const name =
       getAssemblyName(
@@ -1504,34 +868,13 @@ export default function App() {
         name
       );
     }
-
   }
-
-
-  function handleVillageClick(
-    feature
-  ) {
-
-    const name =
-      getVillageName(
-        feature
-      );
-
-    if (name) {
-      handleVillageChange(
-        name
-      );
-    }
-
-  }
-
 
   // =======================================================
   // RESET
   // =======================================================
 
   function resetMap() {
-
     setSelectedState("");
     setSelectedStateCode("");
 
@@ -1541,102 +884,63 @@ export default function App() {
     setSelectedAssembly("");
     setSelectedAssemblyNumber("");
 
-    setSelectedVillage("");
-
     setSelectedStateFeature(null);
     setSelectedDistrictFeature(null);
     setSelectedAssemblyFeature(null);
-    setSelectedVillageFeature(null);
 
-    setBoothLocations([]);
-    setSelectedLocation(null);
-    setSelectedBooth(null);
-    setBoothAnalysis(null);
-
-    setMapLevel(
-      "india"
-    );
-
+    setMapLevel("india");
   }
 
-
   // =======================================================
-  // GO BACK ONE LEVEL
+  // GO BACK
   // =======================================================
 
   function goBack() {
-
-    if (selectedVillage) {
-
-      setSelectedVillage("");
-      setSelectedVillageFeature(null);
-
-      setBoothLocations([]);
-      setSelectedLocation(null);
-      setSelectedBooth(null);
-
-      setMapLevel(
-        "assembly"
-      );
-
-      return;
-    }
-
-
     if (selectedAssembly) {
-
       setSelectedAssembly("");
       setSelectedAssemblyNumber("");
 
-      setSelectedAssemblyFeature(null);
-
-      setSelectedVillage("");
-
-      setMapLevel(
-        "district"
+      setSelectedAssemblyFeature(
+        null
       );
+
+      setMapLevel("district");
 
       return;
     }
 
-
     if (selectedDistrict) {
-
       setSelectedDistrict("");
       setSelectedDistrictCode("");
 
-      setSelectedDistrictFeature(null);
+      setSelectedDistrictFeature(
+        null
+      );
 
       setSelectedAssembly("");
       setSelectedAssemblyNumber("");
 
-      setMapLevel(
-        "state"
+      setSelectedAssemblyFeature(
+        null
       );
+
+      setMapLevel("state");
 
       return;
     }
 
-
     if (selectedState) {
-
       resetMap();
-
     }
-
   }
-
 
   // =======================================================
   // LOADING SCREEN
   // =======================================================
 
   if (loading) {
-
     return (
-
       <div className="loading-screen">
-
         <div className="loading-logo">
           EI
         </div>
@@ -1650,22 +954,16 @@ export default function App() {
         <p>
           Initializing GIS layers...
         </p>
-
       </div>
-
     );
-
   }
-
 
   // =======================================================
   // CURRENT LEVEL
   // =======================================================
 
   const currentLevel =
-    selectedVillage
-      ? "Village"
-      : selectedAssembly
+    selectedAssembly
       ? "Assembly"
       : selectedDistrict
       ? "District"
@@ -1673,15 +971,12 @@ export default function App() {
       ? "State"
       : "India";
 
-
   // =======================================================
   // UI
   // =======================================================
 
   return (
-
     <div className="app">
-
 
       {/* ===================================================
           HEADER
@@ -1709,7 +1004,6 @@ export default function App() {
 
         </div>
 
-
         <div className="header-right">
 
           <div className="system-status">
@@ -1719,7 +1013,6 @@ export default function App() {
             GIS SYSTEM ONLINE
 
           </div>
-
 
           <button
             className="reset-button"
@@ -1733,13 +1026,11 @@ export default function App() {
 
       </header>
 
-
       {/* ===================================================
           BODY
       =================================================== */}
 
       <div className="main-layout">
-
 
         {/* =================================================
             SIDEBAR
@@ -1748,9 +1039,6 @@ export default function App() {
         <aside className="sidebar">
 
           <div className="sidebar-scroll">
-
-
-            {/* LOCATION HEADER */}
 
             <div className="explorer-header">
 
@@ -1772,10 +1060,11 @@ export default function App() {
 
             </div>
 
-
             {/* SELECTORS */}
 
             <div className="selectors">
+
+              {/* STATE */}
 
               <SearchSelect
                 label="State"
@@ -1787,28 +1076,30 @@ export default function App() {
                 }
               />
 
+              {/* DISTRICT */}
 
               <SearchSelect
                 label="District"
                 value={selectedDistrict}
                 options={
-                  selectedState
+                  isUttarPradesh
                     ? districtOptions
                     : []
                 }
                 placeholder={
-                  selectedState
+                  isUttarPradesh
                     ? "Select district"
-                    : "Select state first"
+                    : "Select Uttar Pradesh first"
                 }
                 disabled={
-                  !selectedState
+                  !isUttarPradesh
                 }
                 onChange={
                   handleDistrictChange
                 }
               />
 
+              {/* ASSEMBLY */}
 
               <SearchSelect
                 label="Assembly Constituency"
@@ -1822,38 +1113,15 @@ export default function App() {
                     : "Select district first"
                 }
                 disabled={
-                  !selectedDistrict
+                  !selectedDistrict ||
+                  !isUttarPradesh
                 }
                 onChange={
                   handleAssemblyChange
                 }
               />
 
-
-              <SearchSelect
-                label="Village"
-                value={selectedVillage}
-                options={
-                  villageOptions
-                }
-                placeholder={
-                  selectedAssembly
-                    ? villageOptions.length
-                      ? "Select village"
-                      : "No villages found"
-                    : "Select assembly first"
-                }
-                disabled={
-                  !selectedAssembly ||
-                  villageOptions.length === 0
-                }
-                onChange={
-                  handleVillageChange
-                }
-              />
-
             </div>
-
 
             {/* CURRENT PATH */}
 
@@ -1866,7 +1134,6 @@ export default function App() {
               <div className="path-current">
 
                 {
-                  selectedVillage ||
                   selectedAssembly ||
                   selectedDistrict ||
                   selectedState ||
@@ -1888,20 +1155,15 @@ export default function App() {
                 {selectedAssembly &&
                   `  /  ${selectedAssembly}`}
 
-                {selectedVillage &&
-                  `  /  ${selectedVillage}`}
-
               </div>
 
             </div>
-
 
             {/* BACK */}
 
             {(selectedState ||
               selectedDistrict ||
-              selectedAssembly ||
-              selectedVillage) && (
+              selectedAssembly) && (
 
               <button
                 className="back-button"
@@ -1912,7 +1174,6 @@ export default function App() {
 
             )}
 
-
             {/* STATS */}
 
             <div className="sidebar-section">
@@ -1920,7 +1181,6 @@ export default function App() {
               <div className="section-heading">
                 DATA OVERVIEW
               </div>
-
 
               <div className="stats-grid">
 
@@ -1934,6 +1194,7 @@ export default function App() {
 
                     <strong>
                       {
+                        isUttarPradesh &&
                         selectedState
                           ? districts?.features?.length || 0
                           : "—"
@@ -1948,7 +1209,6 @@ export default function App() {
 
                 </div>
 
-
                 <div className="stat-card">
 
                   <span className="stat-icon">
@@ -1959,6 +1219,7 @@ export default function App() {
 
                     <strong>
                       {
+                        isUttarPradesh &&
                         selectedDistrict
                           ? assemblyOptions.length
                           : "—"
@@ -1973,60 +1234,9 @@ export default function App() {
 
                 </div>
 
-
-                <div className="stat-card">
-
-                  <span className="stat-icon">
-                    ⌖
-                  </span>
-
-                  <div>
-
-                    <strong>
-                      {
-                        selectedAssembly
-                          ? visibleVillages.length
-                          : "—"
-                      }
-                    </strong>
-
-                    <small>
-                      Villages
-                    </small>
-
-                  </div>
-
-                </div>
-
-
-                <div className="stat-card">
-
-                  <span className="stat-icon">
-                    ●
-                  </span>
-
-                  <div>
-
-                    <strong>
-                      {
-                        selectedVillage
-                          ? boothLocations.length
-                          : "—"
-                      }
-                    </strong>
-
-                    <small>
-                      Locations
-                    </small>
-
-                  </div>
-
-                </div>
-
               </div>
 
             </div>
-
 
             {/* LEGEND */}
 
@@ -2035,7 +1245,6 @@ export default function App() {
               <div className="section-heading">
                 MAP LEGEND
               </div>
-
 
               <div className="legend-list">
 
@@ -2049,7 +1258,6 @@ export default function App() {
 
                 </div>
 
-
                 <div className="legend-row">
 
                   <span className="legend-line district-line"></span>
@@ -2059,7 +1267,6 @@ export default function App() {
                   </span>
 
                 </div>
-
 
                 <div className="legend-row">
 
@@ -2071,32 +1278,9 @@ export default function App() {
 
                 </div>
 
-
-                <div className="legend-row">
-
-                  <span className="legend-fill village-fill"></span>
-
-                  <span>
-                    Village boundary
-                  </span>
-
-                </div>
-
-
-                <div className="legend-row">
-
-                  <span className="legend-marker"></span>
-
-                  <span>
-                    Booth location
-                  </span>
-
-                </div>
-
               </div>
 
             </div>
-
 
             {/* INSTRUCTION */}
 
@@ -2126,18 +1310,16 @@ export default function App() {
 
         </aside>
 
-
         {/* =================================================
-            MAP AREA
+            MAP
         ================================================= */}
 
         <main className="map-container">
 
-
           <MapContainer
             center={[
               22.5,
-              79.0
+              79.0,
             ]}
             zoom={5}
             minZoom={4}
@@ -2147,21 +1329,16 @@ export default function App() {
             className="map"
           >
 
-
-            {/* BASE MAP */}
-
             <TileLayer
               attribution="&copy; OpenStreetMap contributors"
               url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
             />
 
-
             {/* =================================================
-                STATE
+                STATES
             ================================================= */}
 
             {states && (
-
               <GeoJSON
                 key="india-states"
                 data={states}
@@ -2170,12 +1347,13 @@ export default function App() {
 
                   const selected =
                     normalizeCode(
-                      getStateCode(feature)
+                      getStateCode(
+                        feature
+                      )
                     ) ===
                     normalizeCode(
                       selectedStateCode
                     );
-
 
                   return {
 
@@ -2197,8 +1375,7 @@ export default function App() {
                     fillOpacity:
                       selected
                         ? 0.20
-                        : 0.04
-
+                        : 0.04,
                   };
 
                 }}
@@ -2213,15 +1390,13 @@ export default function App() {
                       feature
                     );
 
-
                   layer.bindTooltip(
                     name ||
                     "State",
                     {
-                      sticky: true
+                      sticky: true,
                     }
                   );
-
 
                   layer.on({
 
@@ -2230,16 +1405,20 @@ export default function App() {
                         feature
                       ),
 
-                    mouseover: (event) => {
+                    mouseover: (
+                      event
+                    ) => {
 
                       event.target.setStyle({
                         weight: 3,
-                        fillOpacity: 0.20
+                        fillOpacity: 0.20,
                       });
 
                     },
 
-                    mouseout: (event) => {
+                    mouseout: (
+                      event
+                    ) => {
 
                       const selected =
                         normalizeCode(
@@ -2251,7 +1430,6 @@ export default function App() {
                           selectedStateCode
                         );
 
-
                       event.target.setStyle({
 
                         weight:
@@ -2262,30 +1440,27 @@ export default function App() {
                         fillOpacity:
                           selected
                             ? 0.20
-                            : 0.04
-
+                            : 0.04,
                       });
 
-                    }
+                    },
 
                   });
 
                 }}
-
               />
-
             )}
-
 
             {/* =================================================
                 DISTRICTS
+                ONLY FOR UTTAR PRADESH
             ================================================= */}
 
-            {selectedState &&
+            {isUttarPradesh &&
               districts && (
 
               <GeoJSON
-                key="districts"
+                key={`districts-${selectedStateCode}`}
                 data={districts}
 
                 style={(feature) => {
@@ -2299,7 +1474,6 @@ export default function App() {
                     normalizeCode(
                       selectedDistrictCode
                     );
-
 
                   return {
 
@@ -2319,8 +1493,7 @@ export default function App() {
                     fillOpacity:
                       selected
                         ? 0.28
-                        : 0.05
-
+                        : 0.05,
                   };
 
                 }}
@@ -2335,15 +1508,13 @@ export default function App() {
                       feature
                     );
 
-
                   layer.bindTooltip(
                     name ||
                     "District",
                     {
-                      sticky: true
+                      sticky: true,
                     }
                   );
-
 
                   layer.on({
 
@@ -2352,16 +1523,20 @@ export default function App() {
                         feature
                       ),
 
-                    mouseover: (event) => {
+                    mouseover: (
+                      event
+                    ) => {
 
                       event.target.setStyle({
                         weight: 3,
-                        fillOpacity: 0.22
+                        fillOpacity: 0.22,
                       });
 
                     },
 
-                    mouseout: (event) => {
+                    mouseout: (
+                      event
+                    ) => {
 
                       const selected =
                         normalizeCode(
@@ -2373,7 +1548,6 @@ export default function App() {
                           selectedDistrictCode
                         );
 
-
                       event.target.setStyle({
 
                         weight:
@@ -2384,26 +1558,25 @@ export default function App() {
                         fillOpacity:
                           selected
                             ? 0.28
-                            : 0.05
-
+                            : 0.05,
                       });
 
-                    }
+                    },
 
                   });
 
                 }}
-
               />
 
             )}
 
-
             {/* =================================================
                 ASSEMBLIES
+                ONLY FOR UP DISTRICT
             ================================================= */}
 
-            {selectedDistrictCode &&
+            {isUttarPradesh &&
+              selectedDistrictCode &&
               assemblies && (
 
               <GeoJSON
@@ -2413,7 +1586,6 @@ export default function App() {
                 filter={(feature) => {
 
                   return (
-
                     normalizeCode(
                       getAssemblyDistrictCode(
                         feature
@@ -2422,7 +1594,6 @@ export default function App() {
                     normalizeCode(
                       selectedDistrictCode
                     )
-
                   );
 
                 }}
@@ -2447,7 +1618,6 @@ export default function App() {
                       acNo
                     );
 
-
                   return {
 
                     color:
@@ -2466,8 +1636,7 @@ export default function App() {
                     fillOpacity:
                       selected
                         ? 0.48
-                        : 0.20
-
+                        : 0.20,
                   };
 
                 }}
@@ -2487,7 +1656,6 @@ export default function App() {
                       feature
                     );
 
-
                   layer.bindTooltip(
                     `${name || "Assembly"}${
                       acNo
@@ -2495,10 +1663,9 @@ export default function App() {
                         : ""
                     }`,
                     {
-                      sticky: true
+                      sticky: true,
                     }
                   );
-
 
                   layer.on({
 
@@ -2507,16 +1674,20 @@ export default function App() {
                         feature
                       ),
 
-                    mouseover: (event) => {
+                    mouseover: (
+                      event
+                    ) => {
 
                       event.target.setStyle({
                         weight: 3,
-                        fillOpacity: 0.45
+                        fillOpacity: 0.45,
                       });
 
                     },
 
-                    mouseout: (event) => {
+                    mouseout: (
+                      event
+                    ) => {
 
                       const selected =
                         normalizeCode(
@@ -2530,7 +1701,6 @@ export default function App() {
                         getAssemblyColor(
                           acNo
                         );
-
 
                       event.target.setStyle({
 
@@ -2547,302 +1717,17 @@ export default function App() {
                         fillOpacity:
                           selected
                             ? 0.48
-                            : 0.20
-
-                      });
-
-                    }
-
-                  });
-
-                }}
-
-              />
-
-            )}
-
-
-            {/* =================================================
-                VILLAGES
-            ================================================= */}
-
-            {selectedAssemblyNumber &&
-              visibleVillages.length > 0 && (
-
-              <GeoJSON
-                key={`villages-${selectedAssemblyNumber}-${selectedVillage}`}
-                data={{
-                  type: "FeatureCollection",
-                  features:
-                    visibleVillages
-                }}
-
-                style={(feature) => {
-
-                  const index =
-                    visibleVillages.indexOf(
-                      feature
-                    );
-
-                  const color =
-                    getVillageColor(
-                      feature,
-                      index
-                    );
-
-                  const selected =
-                    String(
-                      getVillageName(
-                        feature
-                      )
-                    )
-                      .toLowerCase()
-                      .trim() ===
-                    String(
-                      selectedVillage
-                    )
-                      .toLowerCase()
-                      .trim();
-
-
-                  return {
-
-                    color:
-                      selected
-                        ? "#111827"
-                        : color,
-
-                    weight:
-                      selected
-                        ? 3
-                        : 1,
-
-                    fillColor:
-                      color,
-
-                    fillOpacity:
-                      selected
-                        ? 0.42
-                        : 0.10
-
-                  };
-
-                }}
-
-                onEachFeature={(
-                  feature,
-                  layer
-                ) => {
-
-                  const name =
-                    getVillageName(
-                      feature
-                    );
-
-
-                  layer.bindTooltip(
-                    name ||
-                    "Village",
-                    {
-                      sticky: true
-                    }
-                  );
-
-
-                  layer.on({
-
-                    click: () =>
-                      handleVillageClick(
-                        feature
-                      ),
-
-                    mouseover: (event) => {
-
-                      event.target.setStyle({
-                        weight: 3,
-                        fillOpacity: 0.30
+                            : 0.20,
                       });
 
                     },
 
-                    mouseout: (event) => {
-
-                      const selected =
-                        String(
-                          getVillageName(
-                            feature
-                          )
-                        )
-                          .toLowerCase()
-                          .trim() ===
-                        String(
-                          selectedVillage
-                        )
-                          .toLowerCase()
-                          .trim();
-
-
-                      event.target.setStyle({
-
-                        weight:
-                          selected
-                            ? 3
-                            : 1,
-
-                        fillOpacity:
-                          selected
-                            ? 0.42
-                            : 0.10
-
-                      });
-
-                    }
-
                   });
 
                 }}
-
               />
 
             )}
-
-
-            {/* =================================================
-                BOOTH HOTSPOTS
-            ================================================= */}
-
-            {boothLocations.map(
-              (location, index) => {
-
-                const isSelected =
-                  selectedLocation ===
-                  location;
-
-
-                return (
-
-                  <CircleMarker
-                    key={`${location.latitude}-${location.longitude}-${index}`}
-                    center={[
-                      location.latitude,
-                      location.longitude
-                    ]}
-                    radius={
-                      isSelected
-                        ? 12
-                        : 8
-                    }
-
-                    pathOptions={{
-
-                      color:
-                        "#ffffff",
-
-                      weight: 3,
-
-                      fillColor:
-                        "#ef4444",
-
-                      fillOpacity:
-                        0.95
-
-                    }}
-
-                    eventHandlers={{
-
-                      click: () => {
-
-                        setSelectedLocation(
-                          location
-                        );
-
-                        setSelectedBooth(
-                          null
-                        );
-
-                        setBoothAnalysis(
-                          null
-                        );
-
-                      }
-
-                    }}
-
-                  >
-
-                    <Tooltip
-                      direction="top"
-                      offset={[
-                        0,
-                        -8
-                      ]}
-                    >
-
-                      <strong>
-                        {location.booths?.[0]
-                          ? getBoothName(
-                              location.booths[0]
-                            )
-                          : "Booth Location"}
-                      </strong>
-
-                      <br />
-
-                      {location.booth_count}
-                      {" "}
-                      booth
-                      {location.booth_count !== 1
-                        ? "s"
-                        : ""}
-
-                    </Tooltip>
-
-                    <Popup>
-
-                      <div className="map-popup">
-
-                        <div className="popup-title">
-                          {location.booths?.[0]
-                            ? getBoothName(
-                                location.booths[0]
-                              )
-                            : "Booth Location"}
-                        </div>
-
-                        <div className="popup-count">
-
-                          {location.booth_count}
-
-                          {" "}
-                          Booth
-                          {location.booth_count !== 1
-                            ? "s"
-                            : ""}
-
-                        </div>
-
-                        <button
-                          className="popup-button"
-                          onClick={() =>
-                            setSelectedLocation(
-                              location
-                            )
-                          }
-                        >
-                          View booth details →
-                        </button>
-
-                      </div>
-
-                    </Popup>
-
-                  </CircleMarker>
-
-                );
-
-              }
-            )}
-
 
             {/* =================================================
                 AUTO ZOOM
@@ -2850,7 +1735,6 @@ export default function App() {
 
             <MapController
               selectedFeature={
-                selectedVillageFeature ||
                 selectedAssemblyFeature ||
                 selectedDistrictFeature ||
                 selectedStateFeature
@@ -2859,7 +1743,6 @@ export default function App() {
             />
 
           </MapContainer>
-
 
           {/* =================================================
               MAP TOP BAR
@@ -2887,7 +1770,6 @@ export default function App() {
 
             </div>
 
-
             <div className="map-breadcrumb">
 
               India
@@ -2901,373 +1783,14 @@ export default function App() {
               {selectedAssembly &&
                 ` / ${selectedAssembly}`}
 
-              {selectedVillage &&
-                ` / ${selectedVillage}`}
-
             </div>
 
           </div>
-
-
-          {/* =================================================
-              BOOTH LOADING
-          ================================================= */}
-
-          {boothLoading && (
-
-            <div className="map-loading">
-
-              <div className="mini-spinner"></div>
-
-              Loading booth locations...
-
-            </div>
-
-          )}
-
-
-          {/* =================================================
-              BOOTH LOCATION PANEL
-          ================================================= */}
-
-          {selectedLocation && (
-
-            <div className="booth-panel">
-
-              <div className="panel-header">
-
-                <div>
-
-                  <div className="panel-eyebrow">
-                    POLLING LOCATION
-                  </div>
-
-                  <h3>
-
-                    {
-                      selectedLocation.booths?.[0]
-                        ? getBoothName(
-                            selectedLocation.booths[0]
-                          )
-                        : "Booth Location"
-                    }
-
-                  </h3>
-
-                </div>
-
-
-                <button
-                  className="close-button"
-                  onClick={() =>
-                    setSelectedLocation(
-                      null
-                    )
-                  }
-                >
-                  ×
-                </button>
-
-              </div>
-
-
-              <div className="booth-summary">
-
-                <div className="booth-summary-number">
-                  {selectedLocation.booth_count}
-                </div>
-
-                <div>
-
-                  <strong>
-                    Booths at this location
-                  </strong>
-
-                  <span>
-                    Same physical polling location
-                  </span>
-
-                </div>
-
-              </div>
-
-
-              <div className="booth-list">
-
-                {selectedLocation.booths?.map(
-                  (booth, index) => {
-
-                    const boothNo =
-                      getBoothNumber(
-                        booth
-                      );
-
-                    const boothName =
-                      getBoothName(
-                        booth
-                      );
-
-
-                    const selected =
-                      selectedBooth ===
-                      booth;
-
-
-                    return (
-
-                      <button
-                        key={
-                          `${boothNo}-${index}`
-                        }
-                        className={`booth-row ${
-                          selected
-                            ? "selected-booth"
-                            : ""
-                        }`}
-                        onClick={() =>
-                          loadBoothAnalysis(
-                            booth
-                          )
-                        }
-                      >
-
-                        <span className="booth-number">
-                          {boothNo ||
-                            index + 1}
-                        </span>
-
-                        <span className="booth-info">
-
-                          <strong>
-                            Booth{" "}
-                            {boothNo ||
-                              index + 1}
-                          </strong>
-
-                          <small>
-                            {boothName ||
-                              "Polling station"}
-                          </small>
-
-                        </span>
-
-                        <span className="booth-arrow">
-                          →
-                        </span>
-
-                      </button>
-
-                    );
-
-                  }
-                )}
-
-              </div>
-
-
-              {/* =============================================
-                  BOOTH ANALYSIS
-              ============================================= */}
-
-              {selectedBooth && (
-
-                <div className="analysis-panel">
-
-                  <div className="analysis-header">
-
-                    <div>
-
-                      <span>
-                        BOOTH ANALYSIS
-                      </span>
-
-                      <h3>
-                        Booth{" "}
-                        {getBoothNumber(
-                          selectedBooth
-                        )}
-                      </h3>
-
-                    </div>
-
-                    <div className="analysis-status">
-                      LIVE
-                    </div>
-
-                  </div>
-
-
-                  {boothAnalysis ? (
-
-                    <>
-
-                      <div className="analysis-location">
-
-                        <strong>
-                          {
-                            getBoothName(
-                              selectedBooth
-                            )
-                          }
-                        </strong>
-
-                        <span>
-                          {selectedVillage}
-                          {" • "}
-                          AC{" "}
-                          {selectedAssemblyNumber}
-                        </span>
-
-                      </div>
-
-
-                      <div className="analysis-grid">
-
-                        <div className="metric-card">
-
-                          <span>
-                            TOTAL VOTES
-                          </span>
-
-                          <strong>
-                            {
-                              boothAnalysis.total_votes ??
-                              "—"
-                            }
-                          </strong>
-
-                        </div>
-
-
-                        <div className="metric-card">
-
-                          <span>
-                            VOTE SHARE
-                          </span>
-
-                          <strong>
-                            {
-                              boothAnalysis.vote_share != null
-                                ? `${boothAnalysis.vote_share}%`
-                                : "—"
-                            }
-                          </strong>
-
-                        </div>
-
-
-                        <div className="metric-card">
-
-                          <span>
-                            PREVIOUS VOTES
-                          </span>
-
-                          <strong>
-                            {
-                              boothAnalysis.previous_total_votes ??
-                              "—"
-                            }
-                          </strong>
-
-                        </div>
-
-
-                        <div className="metric-card">
-
-                          <span>
-                            PREVIOUS SHARE
-                          </span>
-
-                          <strong>
-                            {
-                              boothAnalysis.previous_vote_share != null
-                                ? `${boothAnalysis.previous_vote_share}%`
-                                : "—"
-                            }
-                          </strong>
-
-                        </div>
-
-                      </div>
-
-
-                      <div className="analysis-section">
-
-                        <div className="analysis-section-title">
-                          PARTY-WISE VOTE SHARE
-                        </div>
-
-                        {boothAnalysis.parties?.map(
-                          (party, index) => (
-
-                            <div
-                              className="party-row"
-                              key={index}
-                            >
-
-                              <span>
-                                {party.party}
-                              </span>
-
-                              <div className="party-bar">
-
-                                <div
-                                  style={{
-                                    width: `${party.vote_share || 0}%`
-                                  }}
-                                />
-
-                              </div>
-
-                              <strong>
-                                {party.vote_share}%
-                              </strong>
-
-                            </div>
-
-                          )
-                        )}
-
-                      </div>
-
-                    </>
-
-                  ) : (
-
-                    <div className="analysis-placeholder">
-
-                      <div className="placeholder-icon">
-                        ◌
-                      </div>
-
-                      <strong>
-                        Booth selected
-                      </strong>
-
-                      <p>
-                        Connect the booth analysis
-                        endpoint to display vote
-                        share and previous-year
-                        electoral data.
-                      </p>
-
-                    </div>
-
-                  )}
-
-                </div>
-
-              )}
-
-            </div>
-
-          )}
 
         </main>
 
       </div>
 
     </div>
-
   );
 }
