@@ -13,15 +13,32 @@ UP_DIR = BASE_DIR / "UTTAR PRADESH"
 
 
 # =========================================================
+# FILE PATHS
+# =========================================================
+
+INDIA_STATES_FILE = (
+    INDIA_DIR / "INDIA_STATES.geojson"
+)
+
+UP_DISTRICTS_FILE = (
+    UP_DIR / "UP_SELECTED_16_DISTRICTS.geojson"
+)
+
+UP_ASSEMBLIES_FILE = (
+    UP_DIR / "UP_SELECTED_ASSEMBLY.geojson"
+)
+
+
+# =========================================================
 # GENERIC GEOJSON LOADER
 # =========================================================
 
 def load_geojson(path: Path):
 
-    print("\n----------------------------------------")
-    print("Loading GIS data:")
-    print(path)
-    print("----------------------------------------")
+    print("\n========================================")
+    print("Loading GIS data")
+    print("File:", path)
+    print("========================================")
 
     # -----------------------------------------------------
     # FILE CHECK
@@ -29,22 +46,22 @@ def load_geojson(path: Path):
 
     if not path.exists():
 
-        print("FILE NOT FOUND")
+        print("❌ FILE NOT FOUND")
         print("Expected path:", path)
 
         raise FileNotFoundError(
             f"GeoJSON file not found: {path}"
         )
 
-    # -----------------------------------------------------
-    # READ GEOJSON
-    # -----------------------------------------------------
-
     try:
+
+        # -------------------------------------------------
+        # READ FILE
+        # -------------------------------------------------
 
         gdf = gpd.read_file(path)
 
-        print("GeoDataFrame loaded successfully")
+        print("✅ GeoDataFrame loaded")
         print("Features:", len(gdf))
         print("Columns:", list(gdf.columns))
         print("CRS:", gdf.crs)
@@ -55,7 +72,9 @@ def load_geojson(path: Path):
 
         if gdf.empty:
 
-            print("WARNING: GeoDataFrame is empty")
+            print(
+                "⚠ WARNING: GeoDataFrame is empty"
+            )
 
         # -------------------------------------------------
         # GEOMETRY CHECK
@@ -65,43 +84,160 @@ def load_geojson(path: Path):
 
             print(
                 "Empty geometries:",
-                gdf.geometry.is_empty.sum()
+                int(
+                    gdf.geometry.is_empty.sum()
+                )
             )
 
             print(
                 "Null geometries:",
-                gdf.geometry.isna().sum()
+                int(
+                    gdf.geometry.isna().sum()
+                )
             )
 
-        # -------------------------------------------------
-        # ENSURE WGS84
-        # Leaflet expects latitude/longitude
-        # -------------------------------------------------
+        # =================================================
+        # CRS HANDLING
+        # =================================================
 
-        if gdf.crs is not None:
+        if gdf.crs is None:
+
+            print("⚠ CRS is missing")
+
+            gdf = gdf.set_crs(
+                epsg=4326,
+                allow_override=True
+            )
+
+            print(
+                "✅ Missing CRS assumed as EPSG:4326"
+            )
+
+        else:
 
             try:
 
-                if gdf.crs.to_epsg() != 4326:
+                epsg = gdf.crs.to_epsg()
 
-                    gdf = gdf.to_crs(epsg=4326)
+                print(
+                    "Detected EPSG:",
+                    epsg
+                )
 
-                    print(
-                        "Converted CRS to EPSG:4326"
+                if epsg != 4326:
+
+                    gdf = gdf.to_crs(
+                        epsg=4326
                     )
 
-            except Exception:
+                    print(
+                        "✅ Converted CRS to EPSG:4326"
+                    )
 
-                pass
+            except Exception as crs_error:
 
-        # -------------------------------------------------
-        # RETURN GEOJSON
-        # -------------------------------------------------
+                print(
+                    "⚠ CRS check warning:",
+                    crs_error
+                )
 
-        geojson_data = gdf.__geo_interface__
+        # =================================================
+        # GEOMETRY VALIDATION
+        # =================================================
+
+        if "geometry" in gdf.columns:
+
+            try:
+
+                invalid_count = int(
+                    (
+                        ~gdf.geometry.is_valid
+                    ).sum()
+                )
+
+                print(
+                    "Invalid geometries:",
+                    invalid_count
+                )
+
+                if invalid_count > 0:
+
+                    print(
+                        "Attempting geometry repair..."
+                    )
+
+                    try:
+
+                        gdf["geometry"] = (
+                            gdf.geometry.make_valid()
+                        )
+
+                        print(
+                            "✅ Geometry repair completed"
+                        )
+
+                    except Exception as repair_error:
+
+                        print(
+                            "⚠ Geometry repair failed:",
+                            repair_error
+                        )
+
+            except Exception as geometry_error:
+
+                print(
+                    "⚠ Geometry validation warning:",
+                    geometry_error
+                )
+
+        # =================================================
+        # REMOVE NULL / EMPTY GEOMETRIES
+        # =================================================
+
+        if "geometry" in gdf.columns:
+
+            before_count = len(gdf)
+
+            gdf = gdf[
+                gdf.geometry.notna()
+                & ~gdf.geometry.is_empty
+            ].copy()
+
+            removed = (
+                before_count - len(gdf)
+            )
+
+            if removed > 0:
+
+                print(
+                    "Removed empty/null geometries:",
+                    removed
+                )
+
+        # =================================================
+        # GEOJSON
+        # =================================================
+
+        geojson_data = (
+            gdf.__geo_interface__
+        )
 
         print(
-            "GeoJSON response prepared successfully"
+            "✅ GeoJSON prepared"
+        )
+
+        print(
+            "GeoJSON features:",
+            len(
+                geojson_data.get(
+                    "features",
+                    []
+                )
+            )
+        )
+
+        print(
+            "========================================\n"
         )
 
         return geojson_data
@@ -109,7 +245,7 @@ def load_geojson(path: Path):
     except Exception as e:
 
         print(
-            "Error reading GIS data:",
+            "❌ Error reading GIS data:",
             e
         )
 
@@ -123,8 +259,7 @@ def load_geojson(path: Path):
 def get_states():
 
     return load_geojson(
-        INDIA_DIR /
-        "INDIA_STATES.geojson"
+        INDIA_STATES_FILE
     )
 
 
@@ -135,8 +270,7 @@ def get_states():
 def get_up_districts():
 
     return load_geojson(
-        UP_DIR /
-        "UP_SELECTED_16_DISTRICTS.geojson"
+        UP_DISTRICTS_FILE
     )
 
 
@@ -147,45 +281,21 @@ def get_up_districts():
 def get_up_assemblies():
 
     return load_geojson(
-        UP_DIR /
-        "UP_SELECTED_ASSEMBLY.geojson"
-    )
-
-
-# =========================================================
-# UP VILLAGES
-# =========================================================
-
-def get_up_villages():
-
-    return load_geojson(
-        UP_DIR /
-        "UTTAR PRADESH_VILLAGES.geojson"
-    )
-
-
-# =========================================================
-# UP BOOTHS
-# =========================================================
-
-def get_up_booths():
-
-    return load_geojson(
-        UP_DIR /
-        "UTTAR PRADESH_baghpat_booth.geojson"
+        UP_ASSEMBLIES_FILE
     )
 
 
 # =========================================================
 # PROPERTY FINDER
-#
-# Different GeoJSON files may have different
-# column/property names.
 # =========================================================
 
-def find_property(properties, possible_names):
+def find_property(
+    properties,
+    possible_names
+):
 
-    # Create case-insensitive mapping
+    if not properties:
+        return None
 
     normalized = {
         str(key).strip().lower(): key
@@ -212,10 +322,45 @@ def find_property(properties, possible_names):
 def normalize_value(value):
 
     if value is None:
-
         return ""
 
     return str(value).strip().lower()
+
+
+# =========================================================
+# NORMALIZE CODE
+#
+# Example:
+# 052  -> 52
+# AC52 -> 52
+# =========================================================
+
+def normalize_code(value):
+
+    if value is None:
+        return ""
+
+    value = str(value).strip().lower()
+
+    value = value.replace(
+        "ac",
+        ""
+    )
+
+    value = value.replace(
+        " ",
+        ""
+    )
+
+    try:
+
+        return str(
+            int(value)
+        )
+
+    except Exception:
+
+        return value
 
 
 # =========================================================
@@ -255,7 +400,6 @@ def filter_features(
         )
 
         if property_name is None:
-
             continue
 
         actual_value = properties.get(
@@ -263,12 +407,16 @@ def filter_features(
         )
 
         if (
-            normalize_value(actual_value)
+            normalize_value(
+                actual_value
+            )
             ==
             normalize_value(value)
         ):
 
-            matched.append(feature)
+            matched.append(
+                feature
+            )
 
     return {
         "type": "FeatureCollection",
@@ -296,254 +444,10 @@ def get_assemblies_by_district(
             "DISTRICT",
             "DIST_NAME",
             "District_Name",
-            "DistrictName"
+            "DistrictName",
+            "dtname",
+            "DTNAME"
         ],
 
         district_name
     )
-
-
-# =========================================================
-# VILLAGES BY ASSEMBLY
-# =========================================================
-
-def get_villages_by_assembly(
-    assembly_name
-):
-
-    data = get_up_villages()
-
-    return filter_features(
-        data,
-
-        [
-            "assembly",
-            "assembly_name",
-            "assemblyname",
-            "AC_NAME",
-            "ACNAME",
-            "AC_NO",
-            "AC_NUM",
-            "assembly_no",
-            "assembly_number",
-            "Assembly",
-            "Assembly_Name"
-        ],
-
-        assembly_name
-    )
-
-
-# =========================================================
-# BOOTHS BY VILLAGE
-# =========================================================
-
-def get_booths_by_village(
-    village_name
-):
-
-    data = get_up_booths()
-
-    return filter_features(
-        data,
-
-        [
-            "village",
-            "village_name",
-            "villagename",
-            "Village",
-            "Village_Name",
-            "VILLAGE",
-            "VILL_NAME"
-        ],
-
-        village_name
-    )
-
-
-# =========================================================
-# GET ALL BOOTHS AT SAME LOCATION
-# =========================================================
-
-def get_booth_locations(
-    village_name=None
-):
-
-    data = get_up_booths()
-
-    features = data.get(
-        "features",
-        []
-    )
-
-    # -----------------------------------------------------
-    # OPTIONAL VILLAGE FILTER
-    # -----------------------------------------------------
-
-    if village_name:
-
-        village_features = []
-
-        for feature in features:
-
-            properties = feature.get(
-                "properties",
-                {}
-            )
-
-            village_property = find_property(
-                properties,
-
-                [
-                    "village",
-                    "village_name",
-                    "villagename",
-                    "Village",
-                    "Village_Name",
-                    "VILLAGE",
-                    "VILL_NAME"
-                ]
-            )
-
-            if village_property is None:
-
-                continue
-
-            if (
-                normalize_value(
-                    properties.get(
-                        village_property
-                    )
-                )
-                ==
-                normalize_value(
-                    village_name
-                )
-            ):
-
-                village_features.append(
-                    feature
-                )
-
-        features = village_features
-
-    # -----------------------------------------------------
-    # GROUP BY COORDINATES
-    # -----------------------------------------------------
-
-    locations = {}
-
-    for feature in features:
-
-        geometry = feature.get(
-            "geometry"
-        )
-
-        if not geometry:
-
-            continue
-
-        coordinates = geometry.get(
-            "coordinates"
-        )
-
-        if not coordinates:
-
-            continue
-
-        # Point geometry:
-        # [longitude, latitude]
-
-        if geometry.get("type") != "Point":
-
-            continue
-
-        longitude = coordinates[0]
-        latitude = coordinates[1]
-
-        # Round to avoid tiny floating-point differences
-
-        location_key = (
-            round(latitude, 6),
-            round(longitude, 6)
-        )
-
-        properties = feature.get(
-            "properties",
-            {}
-        )
-
-        booth_no_property = find_property(
-            properties,
-
-            [
-                "booth_no",
-                "booth_number",
-                "booth",
-                "part_no",
-                "part_number",
-                "Booth_No",
-                "PART_NO"
-            ]
-        )
-
-        booth_name_property = find_property(
-            properties,
-
-            [
-                "booth_name",
-                "polling_station",
-                "polling_station_name",
-                "location",
-                "booth_location",
-                "Booth_Name",
-                "PS_NAME"
-            ]
-        )
-
-        booth = {
-            "properties": properties,
-            "booth_no": (
-                properties.get(
-                    booth_no_property
-                )
-                if booth_no_property
-                else None
-            ),
-            "booth_name": (
-                properties.get(
-                    booth_name_property
-                )
-                if booth_name_property
-                else None
-            ),
-            "latitude": latitude,
-            "longitude": longitude
-        }
-
-        # -------------------------------------------------
-        # CREATE LOCATION
-        # -------------------------------------------------
-
-        if location_key not in locations:
-
-            locations[location_key] = {
-                "latitude": latitude,
-                "longitude": longitude,
-                "booth_count": 0,
-                "booths": []
-            }
-
-        locations[location_key][
-            "booths"
-        ].append(booth)
-
-        locations[location_key][
-            "booth_count"
-        ] += 1
-
-    return {
-        "locations": list(
-            locations.values()
-        )
-    }
