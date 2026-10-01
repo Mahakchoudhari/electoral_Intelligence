@@ -4,7 +4,9 @@ import {
   MapContainer,
   TileLayer,
   GeoJSON,
+  CircleMarker,
   Tooltip,
+  Popup,
   useMap,
 } from "react-leaflet";
 
@@ -26,13 +28,17 @@ const API = "http://127.0.0.1:8000/api/gis";
 // =========================================================
 
 function getProperty(properties, names) {
+
   if (!properties) return "";
 
   const keys = Object.keys(properties);
 
   for (const name of names) {
+
     const key = keys.find(
-      (k) => k.toLowerCase() === name.toLowerCase()
+      (k) =>
+        String(k).toLowerCase() ===
+        String(name).toLowerCase()
     );
 
     if (key !== undefined) {
@@ -45,11 +51,17 @@ function getProperty(properties, names) {
 
 
 // =========================================================
-// CODE NORMALIZER
+// NORMALIZE
 // =========================================================
 
 function normalizeCode(value) {
-  if (value === null || value === undefined) return "";
+
+  if (
+    value === null ||
+    value === undefined
+  ) {
+    return "";
+  }
 
   const str = String(value).trim();
 
@@ -64,19 +76,31 @@ function normalizeCode(value) {
 // =========================================================
 
 function getStateName(feature) {
-  return getProperty(feature?.properties, [
-    "STNAME",
-    "ST_NAME",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "STNAME",
+      "ST_NAME",
+      "state_name",
+      "State_Name",
+      "STATE"
+    ]
+  );
 }
 
 
 function getStateCode(feature) {
-  return getProperty(feature?.properties, [
-    "STCODE11",
-    "ST_CODE",
-    "State_LGD",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "STCODE11",
+      "ST_CODE",
+      "State_LGD",
+      "state_code"
+    ]
+  );
 }
 
 
@@ -85,22 +109,33 @@ function getStateCode(feature) {
 // =========================================================
 
 function getDistrictName(feature) {
-  return getProperty(feature?.properties, [
-    "dtname",
-    "DTNAME",
-    "DIST_NAME",
-    "dtname11",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "dtname",
+      "DTNAME",
+      "DIST_NAME",
+      "dtname11",
+      "district",
+      "district_name"
+    ]
+  );
 }
 
 
 function getDistrictCode(feature) {
-  return getProperty(feature?.properties, [
-    "dtcode11",
-    "DT_CODE",
-    "Dist_LGD",
-    "dist_lgd",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "dtcode11",
+      "DT_CODE",
+      "Dist_LGD",
+      "dist_lgd",
+      "district_code"
+    ]
+  );
 }
 
 
@@ -109,26 +144,47 @@ function getDistrictCode(feature) {
 // =========================================================
 
 function getAssemblyName(feature) {
-  return getProperty(feature?.properties, [
-    "AC_NAME",
-    "ac_name",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "AC_NAME",
+      "ac_name",
+      "assembly",
+      "assembly_name"
+    ]
+  );
 }
 
 
 function getAssemblyNumber(feature) {
-  return getProperty(feature?.properties, [
-    "AC_NO",
-    "ac_no",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "AC_NO",
+      "ac_no",
+      "acno",
+      "ACNO",
+      "assembly_no",
+      "assembly_number"
+    ]
+  );
 }
 
 
 function getAssemblyDistrictCode(feature) {
-  return getProperty(feature?.properties, [
-    "dtcode11",
-    "DT_CODE",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "dtcode11",
+      "DT_CODE",
+      "dist_lgd",
+      "Dist_LGD",
+      "district_code"
+    ]
+  );
 }
 
 
@@ -137,39 +193,101 @@ function getAssemblyDistrictCode(feature) {
 // =========================================================
 
 function getVillageName(feature) {
-  return getProperty(feature?.properties, [
-    "vilname11",
-    "vilnam_soi",
-    "search_village",
-    "VILNAME11",
-    "VIL_NAME",
-    "village_name",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "vilname11",
+      "vilnam_soi",
+      "search_village",
+      "VILNAME11",
+      "VIL_NAME",
+      "village_name",
+      "village",
+      "Village",
+      "Village_Name"
+    ]
+  );
 }
 
 
 function getVillageDistrictCode(feature) {
-  return getProperty(feature?.properties, [
-    "dtcode11",
-    "DT_CODE",
-    "dist_lgd",
-    "Dist_LGD",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "dtcode11",
+      "DT_CODE",
+      "dist_lgd",
+      "Dist_LGD",
+      "district_code"
+    ]
+  );
 }
 
 
 function getVillageAssemblyNumber(feature) {
-  return getProperty(feature?.properties, [
-    "ac_no",
-    "AC_NO",
-    "acno",
-    "ACNO",
-  ]);
+
+  return getProperty(
+    feature?.properties,
+    [
+      "ac_no",
+      "AC_NO",
+      "acno",
+      "ACNO",
+      "assembly_no",
+      "assembly_number"
+    ]
+  );
 }
 
 
 // =========================================================
-// SEARCHABLE DROPDOWN
+// BOOTH PROPERTY HELPERS
+// =========================================================
+
+function getBoothNumber(booth) {
+
+  return (
+    booth?.booth_no ??
+    getProperty(
+      booth?.properties,
+      [
+        "booth_no",
+        "booth_number",
+        "booth",
+        "part_no",
+        "part_number",
+        "Booth_No",
+        "PART_NO"
+      ]
+    )
+  );
+}
+
+
+function getBoothName(booth) {
+
+  return (
+    booth?.booth_name ??
+    getProperty(
+      booth?.properties,
+      [
+        "booth_name",
+        "polling_station",
+        "polling_station_name",
+        "location",
+        "booth_location",
+        "Booth_Name",
+        "PS_NAME"
+      ]
+    )
+  );
+}
+
+
+// =========================================================
+// SEARCH SELECT
 // =========================================================
 
 function SearchSelect({
@@ -180,66 +298,116 @@ function SearchSelect({
   onChange,
   disabled = false,
 }) {
-  const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
 
-  const filteredOptions = useMemo(() => {
-    if (!search.trim()) {
-      return options;
-    }
+  const [open, setOpen] =
+    useState(false);
 
-    return options.filter((option) =>
-      String(option)
-        .toLowerCase()
-        .includes(search.toLowerCase())
-    );
-  }, [options, search]);
+  const [search, setSearch] =
+    useState("");
+
+
+  const filteredOptions =
+    useMemo(() => {
+
+      if (!search.trim()) {
+        return options;
+      }
+
+      return options.filter(
+        (option) =>
+          String(option)
+            .toLowerCase()
+            .includes(
+              search.toLowerCase()
+            )
+      );
+
+    }, [
+      options,
+      search
+    ]);
+
 
   useEffect(() => {
+
     if (disabled) {
+
       setOpen(false);
       setSearch("");
+
     }
+
   }, [disabled]);
 
+
   return (
+
     <div className="select-wrapper">
 
-      <label>{label}</label>
+      <label className="field-label">
+        {label}
+      </label>
 
       <div
         className={`custom-select ${
-          disabled ? "disabled" : ""
+          disabled
+            ? "disabled"
+            : ""
         }`}
         onClick={() => {
+
           if (!disabled) {
-            setOpen((prev) => !prev);
+            setOpen(
+              (prev) => !prev
+            );
           }
+
         }}
       >
-        <div className="selected-value">
+
+        <div
+          className={
+            value
+              ? "selected-value"
+              : "selected-value placeholder"
+          }
+        >
           {value || placeholder}
         </div>
 
-        <span className="arrow">
-          {open ? "▲" : "▼"}
+        <span className="select-arrow">
+          {open ? "⌃" : "⌄"}
         </span>
+
       </div>
 
 
       {open && !disabled && (
+
         <div
           className="select-dropdown"
-          onClick={(e) => e.stopPropagation()}
+          onClick={(e) =>
+            e.stopPropagation()
+          }
         >
 
-          <input
-            autoFocus
-            className="select-search"
-            placeholder={`Search ${label.toLowerCase()}...`}
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
+          <div className="search-box">
+
+            <span>⌕</span>
+
+            <input
+              autoFocus
+              placeholder={`Search ${label.toLowerCase()}...`}
+              value={search}
+              onChange={(e) =>
+                setSearch(
+                  e.target.value
+                )
+              }
+            />
+
+          </div>
+
 
           <div className="options-list">
 
@@ -251,34 +419,48 @@ function SearchSelect({
 
             ) : (
 
-              filteredOptions.map((option) => (
+              filteredOptions.map(
+                (option) => (
 
-                <div
-                  key={String(option)}
-                  className={`option ${
-                    option === value
-                      ? "active-option"
-                      : ""
-                  }`}
-                  onClick={() => {
+                  <div
+                    key={String(option)}
+                    className={`option ${
+                      String(option) ===
+                      String(value)
+                        ? "active-option"
+                        : ""
+                    }`}
+                    onClick={() => {
 
-                    onChange(option);
+                      onChange(option);
 
-                    setSearch("");
+                      setSearch("");
 
-                    setOpen(false);
-                  }}
-                >
-                  {option}
-                </div>
+                      setOpen(false);
 
-              ))
+                    }}
+                  >
+
+                    <span>
+                      {option}
+                    </span>
+
+                    {String(option) ===
+                      String(value) && (
+                      <span>✓</span>
+                    )}
+
+                  </div>
+
+                )
+              )
 
             )}
 
           </div>
 
         </div>
+
       )}
 
     </div>
@@ -287,14 +469,16 @@ function SearchSelect({
 
 
 // =========================================================
-// AUTO ZOOM CONTROLLER
+// MAP AUTO ZOOM
 // =========================================================
 
 function MapController({
   selectedFeature,
-  level,
+  level
 }) {
+
   const map = useMap();
+
 
   useEffect(() => {
 
@@ -304,9 +488,14 @@ function MapController({
 
     try {
 
-      const layer = L.geoJSON(selectedFeature);
+      const layer =
+        L.geoJSON(
+          selectedFeature
+        );
 
-      const bounds = layer.getBounds();
+      const bounds =
+        layer.getBounds();
+
 
       if (bounds.isValid()) {
 
@@ -321,27 +510,41 @@ function MapController({
         }
 
         if (level === "assembly") {
-          maxZoom = 13;
+          maxZoom = 12;
         }
 
         if (level === "village") {
-          maxZoom = 17;
+          maxZoom = 16;
         }
+
 
         map.flyToBounds(
           bounds,
           {
-            padding: [50, 50],
-            duration: 1.2,
-            maxZoom,
+            paddingTopLeft: [
+              40,
+              40
+            ],
+
+            paddingBottomRight: [
+              420,
+              40
+            ],
+
+            duration: 1.15,
+
+            easeLinearity: 0.2,
+
+            maxZoom
           }
         );
+
       }
 
     } catch (error) {
 
       console.error(
-        "Zoom error:",
+        "Map zoom error:",
         error
       );
 
@@ -350,10 +553,92 @@ function MapController({
   }, [
     selectedFeature,
     level,
-    map,
+    map
   ]);
 
+
   return null;
+}
+
+
+// =========================================================
+// ASSEMBLY COLORS
+// =========================================================
+
+const ASSEMBLY_COLORS = [
+  "#2563eb",
+  "#7c3aed",
+  "#db2777",
+  "#dc2626",
+  "#ea580c",
+  "#ca8a04",
+  "#16a34a",
+  "#059669",
+  "#0891b2",
+  "#4f46e5",
+  "#9333ea",
+  "#e11d48",
+  "#0d9488",
+  "#65a30d",
+  "#c026d3",
+  "#0284c7"
+];
+
+
+function getAssemblyColor(
+  assemblyNumber
+) {
+
+  const number =
+    parseInt(
+      assemblyNumber,
+      10
+    );
+
+  if (
+    Number.isNaN(number)
+  ) {
+    return ASSEMBLY_COLORS[0];
+  }
+
+  return ASSEMBLY_COLORS[
+    Math.abs(number) %
+    ASSEMBLY_COLORS.length
+  ];
+}
+
+
+// =========================================================
+// VILLAGE COLORS
+// =========================================================
+
+function getVillageColor(
+  feature,
+  index
+) {
+
+  const name =
+    getVillageName(feature) ||
+    "";
+
+  let hash = 0;
+
+  for (
+    let i = 0;
+    i < name.length;
+    i++
+  ) {
+
+    hash =
+      name.charCodeAt(i) +
+      ((hash << 5) - hash);
+
+  }
+
+  return ASSEMBLY_COLORS[
+    Math.abs(hash + index) %
+    ASSEMBLY_COLORS.length
+  ];
 }
 
 
@@ -364,23 +649,31 @@ function MapController({
 export default function App() {
 
   // =======================================================
-  // GEOJSON DATA
+  // DATA
   // =======================================================
 
-  const [states, setStates] = useState(null);
+  const [states, setStates] =
+    useState(null);
 
-  const [districts, setDistricts] = useState(null);
+  const [districts, setDistricts] =
+    useState(null);
 
-  const [assemblies, setAssemblies] = useState(null);
+  const [assemblies, setAssemblies] =
+    useState(null);
 
-  const [villages, setVillages] = useState(null);
+  const [villages, setVillages] =
+    useState(null);
+
+  const [boothLocations, setBoothLocations] =
+    useState([]);
 
 
   // =======================================================
   // SELECTION
   // =======================================================
 
-  const [selectedState, setSelectedState] = useState("");
+  const [selectedState, setSelectedState] =
+    useState("");
 
   const [selectedStateCode, setSelectedStateCode] =
     useState("");
@@ -402,7 +695,7 @@ export default function App() {
 
 
   // =======================================================
-  // SELECTED FEATURES
+  // FEATURES
   // =======================================================
 
   const [selectedStateFeature, setSelectedStateFeature] =
@@ -419,7 +712,21 @@ export default function App() {
 
 
   // =======================================================
-  // MAP LEVEL
+  // BOOTH UI
+  // =======================================================
+
+  const [selectedLocation, setSelectedLocation] =
+    useState(null);
+
+  const [selectedBooth, setSelectedBooth] =
+    useState(null);
+
+  const [boothAnalysis, setBoothAnalysis] =
+    useState(null);
+
+
+  // =======================================================
+  // MAP
   // =======================================================
 
   const [mapLevel, setMapLevel] =
@@ -430,7 +737,11 @@ export default function App() {
   // LOADING
   // =======================================================
 
-  const [loading, setLoading] = useState(true);
+  const [loading, setLoading] =
+    useState(true);
+
+  const [boothLoading, setBoothLoading] =
+    useState(false);
 
 
   // =======================================================
@@ -443,9 +754,10 @@ export default function App() {
 
       try {
 
-        const response = await fetch(
-          `${API}/states`
-        );
+        const response =
+          await fetch(
+            `${API}/states`
+          );
 
         if (!response.ok) {
           throw new Error(
@@ -453,12 +765,8 @@ export default function App() {
           );
         }
 
-        const data = await response.json();
-
-        console.log(
-          "States loaded:",
-          data?.features?.length
-        );
+        const data =
+          await response.json();
 
         setStates(data);
 
@@ -474,6 +782,7 @@ export default function App() {
         setLoading(false);
 
       }
+
     }
 
     loadStates();
@@ -482,7 +791,7 @@ export default function App() {
 
 
   // =======================================================
-  // LOAD UP DATA
+  // LOAD UP GIS
   // =======================================================
 
   useEffect(() => {
@@ -494,22 +803,23 @@ export default function App() {
         const [
           districtResponse,
           assemblyResponse,
-          villageResponse,
-        ] = await Promise.all([
+          villageResponse
+        ] =
+          await Promise.all([
 
-          fetch(
-            `${API}/districts/uttar-pradesh`
-          ),
+            fetch(
+              `${API}/districts/uttar-pradesh`
+            ),
 
-          fetch(
-            `${API}/assemblies/uttar-pradesh`
-          ),
+            fetch(
+              `${API}/assemblies/uttar-pradesh`
+            ),
 
-          fetch(
-            `${API}/villages/uttar-pradesh`
-          ),
+            fetch(
+              `${API}/villages/uttar-pradesh`
+            )
 
-        ]);
+          ]);
 
 
         if (
@@ -535,27 +845,17 @@ export default function App() {
           await villageResponse.json();
 
 
-        console.log(
-          "Districts loaded:",
-          districtData?.features?.length
+        setDistricts(
+          districtData
         );
 
-        console.log(
-          "Assemblies loaded:",
-          assemblyData?.features?.length
+        setAssemblies(
+          assemblyData
         );
 
-        console.log(
-          "Villages loaded:",
-          villageData?.features?.length
+        setVillages(
+          villageData
         );
-
-
-        setDistricts(districtData);
-
-        setAssemblies(assemblyData);
-
-        setVillages(villageData);
 
       } catch (error) {
 
@@ -577,192 +877,319 @@ export default function App() {
   // STATE OPTIONS
   // =======================================================
 
-  const stateOptions = useMemo(() => {
+  const stateOptions =
+    useMemo(() => {
 
-    if (!states?.features) {
-      return [];
-    }
+      if (!states?.features) {
+        return [];
+      }
 
-    return [
-      ...new Set(
-        states.features
-          .map(getStateName)
-          .filter(Boolean)
-      ),
-    ].sort();
+      return [
+        ...new Set(
+          states.features
+            .map(getStateName)
+            .filter(Boolean)
+        )
+      ].sort();
 
-  }, [states]);
+    }, [states]);
 
 
   // =======================================================
   // DISTRICT OPTIONS
   // =======================================================
 
-  const districtOptions = useMemo(() => {
+  const districtOptions =
+    useMemo(() => {
 
-    if (!districts?.features) {
-      return [];
-    }
+      if (!districts?.features) {
+        return [];
+      }
 
-    return [
-      ...new Set(
-        districts.features
-          .map(getDistrictName)
-          .filter(Boolean)
-      ),
-    ].sort();
+      return [
+        ...new Set(
+          districts.features
+            .map(getDistrictName)
+            .filter(Boolean)
+        )
+      ].sort();
 
-  }, [districts]);
+    }, [districts]);
 
 
   // =======================================================
   // ASSEMBLY OPTIONS
   // =======================================================
 
-  const assemblyOptions = useMemo(() => {
+  const assemblyOptions =
+    useMemo(() => {
 
-    if (
-      !assemblies?.features ||
-      !selectedDistrictCode
-    ) {
-      return [];
-    }
+      if (
+        !assemblies?.features ||
+        !selectedDistrictCode
+      ) {
+        return [];
+      }
 
-    const filtered =
-      assemblies.features.filter(
+
+      const filtered =
+        assemblies.features.filter(
+          (feature) => {
+
+            return (
+              normalizeCode(
+                getAssemblyDistrictCode(
+                  feature
+                )
+              ) ===
+              normalizeCode(
+                selectedDistrictCode
+              )
+            );
+
+          }
+        );
+
+
+      return [
+        ...new Map(
+
+          filtered.map(
+            (feature) => {
+
+              const acNo =
+                getAssemblyNumber(
+                  feature
+                );
+
+              const name =
+                getAssemblyName(
+                  feature
+                );
+
+              return [
+                String(acNo),
+                name
+              ];
+
+            }
+          )
+
+        ).values()
+
+      ]
+        .filter(Boolean)
+        .sort();
+
+    }, [
+      assemblies,
+      selectedDistrictCode
+    ]);
+
+
+  // =======================================================
+  // VISIBLE VILLAGES
+  // =======================================================
+
+  const visibleVillages =
+    useMemo(() => {
+
+      if (
+        !villages?.features ||
+        !selectedDistrictCode ||
+        !selectedAssemblyNumber
+      ) {
+        return [];
+      }
+
+
+      return villages.features.filter(
         (feature) => {
 
-          const assemblyDistrictCode =
-            getAssemblyDistrictCode(feature);
-
           return (
+
             normalizeCode(
-              assemblyDistrictCode
+              getVillageDistrictCode(
+                feature
+              )
             ) ===
             normalizeCode(
               selectedDistrictCode
             )
+
+            &&
+
+            normalizeCode(
+              getVillageAssemblyNumber(
+                feature
+              )
+            ) ===
+            normalizeCode(
+              selectedAssemblyNumber
+            )
+
           );
 
         }
       );
 
-
-    return [
-      ...new Map(
-
-        filtered.map((feature) => {
-
-          const acNo =
-            getAssemblyNumber(feature);
-
-          const name =
-            getAssemblyName(feature);
-
-          return [
-            String(acNo),
-            name,
-          ];
-
-        })
-
-      ).values(),
-
-    ]
-      .filter(Boolean)
-      .sort();
-
-  }, [
-    assemblies,
-    selectedDistrictCode,
-  ]);
-
-
-  // =======================================================
-  // VILLAGES OF SELECTED ASSEMBLY
-  // =======================================================
-
-  const visibleVillages = useMemo(() => {
-
-    if (
-      !villages?.features ||
-      !selectedDistrictCode ||
-      !selectedAssemblyNumber
-    ) {
-      return [];
-    }
-
-    return villages.features.filter(
-      (feature) => {
-
-        const villageDistrictCode =
-          getVillageDistrictCode(
-            feature
-          );
-
-        const villageAssemblyNumber =
-          getVillageAssemblyNumber(
-            feature
-          );
-
-
-        return (
-
-          normalizeCode(
-            villageDistrictCode
-          ) ===
-          normalizeCode(
-            selectedDistrictCode
-          )
-
-          &&
-
-          normalizeCode(
-            villageAssemblyNumber
-          ) ===
-          normalizeCode(
-            selectedAssemblyNumber
-          )
-
-        );
-
-      }
-    );
-
-  }, [
-    villages,
-    selectedDistrictCode,
-    selectedAssemblyNumber,
-  ]);
+    }, [
+      villages,
+      selectedDistrictCode,
+      selectedAssemblyNumber
+    ]);
 
 
   // =======================================================
   // VILLAGE OPTIONS
   // =======================================================
 
-  const villageOptions = useMemo(() => {
+  const villageOptions =
+    useMemo(() => {
 
-    return [
-      ...new Set(
-        visibleVillages
-          .map(getVillageName)
-          .filter(Boolean)
-      ),
-    ].sort();
+      return [
+        ...new Set(
+          visibleVillages
+            .map(getVillageName)
+            .filter(Boolean)
+        )
+      ].sort();
 
-  }, [visibleVillages]);
+    }, [visibleVillages]);
+
+
+  // =======================================================
+  // LOAD BOOTHS
+  // =======================================================
+
+  async function loadBooths(
+    villageName
+  ) {
+
+    try {
+
+      setBoothLoading(true);
+
+      setSelectedLocation(null);
+      setSelectedBooth(null);
+      setBoothAnalysis(null);
+
+
+      const response =
+        await fetch(
+          `${API}/booth-locations?village=${encodeURIComponent(
+            villageName
+          )}`
+        );
+
+
+      if (!response.ok) {
+        throw new Error(
+          "Failed to load booth locations"
+        );
+      }
+
+
+      const data =
+        await response.json();
+
+
+      setBoothLocations(
+        data?.locations || []
+      );
+
+    } catch (error) {
+
+      console.error(
+        "Booth loading error:",
+        error
+      );
+
+      setBoothLocations([]);
+
+    } finally {
+
+      setBoothLoading(false);
+
+    }
+
+  }
+
+
+  // =======================================================
+  // LOAD BOOTH ANALYSIS
+  // =======================================================
+
+  async function loadBoothAnalysis(
+    booth
+  ) {
+
+    setSelectedBooth(
+      booth
+    );
+
+    setBoothAnalysis(null);
+
+
+    const boothNo =
+      getBoothNumber(
+        booth
+      );
+
+
+    if (!boothNo) {
+      return;
+    }
+
+
+    try {
+
+      const response =
+        await fetch(
+          `${API}/booth/${encodeURIComponent(
+            boothNo
+          )}/analysis`
+        );
+
+
+      if (
+        response.ok
+      ) {
+
+        const data =
+          await response.json();
+
+        setBoothAnalysis(
+          data
+        );
+
+      }
+
+    } catch (error) {
+
+      console.log(
+        "Booth analysis endpoint not available yet."
+      );
+
+    }
+
+  }
 
 
   // =======================================================
   // STATE CHANGE
   // =======================================================
 
-  function handleStateChange(stateName) {
+  function handleStateChange(
+    stateName
+  ) {
 
     const feature =
       states?.features?.find(
         (item) =>
-          String(getStateName(item))
+          String(
+            getStateName(item)
+          )
             .toLowerCase()
             .trim() ===
           String(stateName)
@@ -771,45 +1198,56 @@ export default function App() {
       );
 
 
-    if (!feature) {
-      return;
-    }
+    if (!feature) return;
 
 
-    const stateCode =
-      getStateCode(feature);
-
-
-    setSelectedState(stateName);
+    setSelectedState(
+      stateName
+    );
 
     setSelectedStateCode(
-      String(stateCode)
+      String(
+        getStateCode(feature)
+      )
     );
 
 
     setSelectedDistrict("");
-
     setSelectedDistrictCode("");
 
-
     setSelectedAssembly("");
-
     setSelectedAssemblyNumber("");
-
 
     setSelectedVillage("");
 
 
-    setSelectedStateFeature(feature);
+    setSelectedStateFeature(
+      feature
+    );
 
-    setSelectedDistrictFeature(null);
+    setSelectedDistrictFeature(
+      null
+    );
 
-    setSelectedAssemblyFeature(null);
+    setSelectedAssemblyFeature(
+      null
+    );
 
-    setSelectedVillageFeature(null);
+    setSelectedVillageFeature(
+      null
+    );
 
 
-    setMapLevel("state");
+    setBoothLocations([]);
+
+    setSelectedLocation(null);
+    setSelectedBooth(null);
+    setBoothAnalysis(null);
+
+
+    setMapLevel(
+      "state"
+    );
 
   }
 
@@ -818,12 +1256,16 @@ export default function App() {
   // DISTRICT CHANGE
   // =======================================================
 
-  function handleDistrictChange(districtName) {
+  function handleDistrictChange(
+    districtName
+  ) {
 
     const feature =
       districts?.features?.find(
         (item) =>
-          String(getDistrictName(item))
+          String(
+            getDistrictName(item)
+          )
             .toLowerCase()
             .trim() ===
           String(districtName)
@@ -832,20 +1274,7 @@ export default function App() {
       );
 
 
-    if (!feature) {
-
-      console.error(
-        "District not found:",
-        districtName
-      );
-
-      return;
-
-    }
-
-
-    const districtCode =
-      getDistrictCode(feature);
+    if (!feature) return;
 
 
     setSelectedDistrict(
@@ -853,27 +1282,41 @@ export default function App() {
     );
 
     setSelectedDistrictCode(
-      String(districtCode)
+      String(
+        getDistrictCode(feature)
+      )
     );
 
 
     setSelectedAssembly("");
-
     setSelectedAssemblyNumber("");
 
     setSelectedVillage("");
 
 
-    setSelectedAssemblyFeature(null);
+    setSelectedAssemblyFeature(
+      null
+    );
 
-    setSelectedVillageFeature(null);
+    setSelectedVillageFeature(
+      null
+    );
 
 
     setSelectedDistrictFeature(
       feature
     );
 
-    setMapLevel("district");
+
+    setBoothLocations([]);
+    setSelectedLocation(null);
+    setSelectedBooth(null);
+    setBoothAnalysis(null);
+
+
+    setMapLevel(
+      "district"
+    );
 
   }
 
@@ -890,17 +1333,12 @@ export default function App() {
       assemblies?.features?.find(
         (item) => {
 
-          const assemblyDistrictCode =
-            getAssemblyDistrictCode(item);
-
-          const name =
-            getAssemblyName(item);
-
-
           return (
 
             normalizeCode(
-              assemblyDistrictCode
+              getAssemblyDistrictCode(
+                item
+              )
             ) ===
             normalizeCode(
               selectedDistrictCode
@@ -908,7 +1346,9 @@ export default function App() {
 
             &&
 
-            String(name)
+            String(
+              getAssemblyName(item)
+            )
               .toLowerCase()
               .trim() ===
             String(assemblyName)
@@ -921,20 +1361,13 @@ export default function App() {
       );
 
 
-    if (!feature) {
-
-      console.error(
-        "Assembly not found:",
-        assemblyName
-      );
-
-      return;
-
-    }
+    if (!feature) return;
 
 
     const assemblyNumber =
-      getAssemblyNumber(feature);
+      getAssemblyNumber(
+        feature
+      );
 
 
     setSelectedAssembly(
@@ -945,17 +1378,27 @@ export default function App() {
       String(assemblyNumber)
     );
 
-
     setSelectedVillage("");
-
-    setSelectedVillageFeature(null);
 
 
     setSelectedAssemblyFeature(
       feature
     );
 
-    setMapLevel("assembly");
+    setSelectedVillageFeature(
+      null
+    );
+
+
+    setBoothLocations([]);
+    setSelectedLocation(null);
+    setSelectedBooth(null);
+    setBoothAnalysis(null);
+
+
+    setMapLevel(
+      "assembly"
+    );
 
   }
 
@@ -964,14 +1407,16 @@ export default function App() {
   // VILLAGE CHANGE
   // =======================================================
 
-  function handleVillageChange(
+  async function handleVillageChange(
     villageName
   ) {
 
     const feature =
       visibleVillages.find(
         (item) =>
-          String(getVillageName(item))
+          String(
+            getVillageName(item)
+          )
             .toLowerCase()
             .trim() ===
           String(villageName)
@@ -980,16 +1425,7 @@ export default function App() {
       );
 
 
-    if (!feature) {
-
-      console.error(
-        "Village not found:",
-        villageName
-      );
-
-      return;
-
-    }
+    if (!feature) return;
 
 
     setSelectedVillage(
@@ -1002,100 +1438,90 @@ export default function App() {
     );
 
 
-    setMapLevel("village");
-
-  }
-
-
-  // =======================================================
-  // STATE MAP CLICK
-  // =======================================================
-
-  function handleStateClick(feature) {
-
-    const stateName =
-      getStateName(feature);
-
-    if (!stateName) {
-      return;
-    }
-
-    handleStateChange(
-      stateName
+    setMapLevel(
+      "village"
     );
 
-  }
 
-
-  // =======================================================
-  // DISTRICT MAP CLICK
-  // =======================================================
-
-  function handleDistrictClick(feature) {
-
-    const districtName =
-      getDistrictName(feature);
-
-    const districtCode =
-      getDistrictCode(feature);
-
-
-    if (
-      !districtName ||
-      !districtCode
-    ) {
-      return;
-    }
-
-
-    handleDistrictChange(
-      districtName
-    );
-
-  }
-
-
-  // =======================================================
-  // ASSEMBLY MAP CLICK
-  // =======================================================
-
-  function handleAssemblyClick(feature) {
-
-    const assemblyName =
-      getAssemblyName(feature);
-
-    const assemblyNumber =
-      getAssemblyNumber(feature);
-
-
-    if (!assemblyNumber) {
-      return;
-    }
-
-
-    handleAssemblyChange(
-      assemblyName
-    );
-
-  }
-
-
-  // =======================================================
-  // VILLAGE MAP CLICK
-  // =======================================================
-
-  function handleVillageClick(feature) {
-
-    const villageName =
-      getVillageName(feature);
-
-    if (!villageName) {
-      return;
-    }
-
-    handleVillageChange(
+    await loadBooths(
       villageName
     );
+
+  }
+
+
+  // =======================================================
+  // MAP CLICKS
+  // =======================================================
+
+  function handleStateClick(
+    feature
+  ) {
+
+    const name =
+      getStateName(
+        feature
+      );
+
+    if (name) {
+      handleStateChange(
+        name
+      );
+    }
+
+  }
+
+
+  function handleDistrictClick(
+    feature
+  ) {
+
+    const name =
+      getDistrictName(
+        feature
+      );
+
+    if (name) {
+      handleDistrictChange(
+        name
+      );
+    }
+
+  }
+
+
+  function handleAssemblyClick(
+    feature
+  ) {
+
+    const name =
+      getAssemblyName(
+        feature
+      );
+
+    if (name) {
+      handleAssemblyChange(
+        name
+      );
+    }
+
+  }
+
+
+  function handleVillageClick(
+    feature
+  ) {
+
+    const name =
+      getVillageName(
+        feature
+      );
+
+    if (name) {
+      handleVillageChange(
+        name
+      );
+    }
 
   }
 
@@ -1107,140 +1533,102 @@ export default function App() {
   function resetMap() {
 
     setSelectedState("");
-
     setSelectedStateCode("");
 
     setSelectedDistrict("");
-
     setSelectedDistrictCode("");
 
     setSelectedAssembly("");
-
     setSelectedAssemblyNumber("");
 
     setSelectedVillage("");
 
     setSelectedStateFeature(null);
-
     setSelectedDistrictFeature(null);
-
     setSelectedAssemblyFeature(null);
-
     setSelectedVillageFeature(null);
 
-    setMapLevel("india");
+    setBoothLocations([]);
+    setSelectedLocation(null);
+    setSelectedBooth(null);
+    setBoothAnalysis(null);
+
+    setMapLevel(
+      "india"
+    );
 
   }
 
 
   // =======================================================
-  // ASSEMBLY COLOR
+  // GO BACK ONE LEVEL
   // =======================================================
 
-  function getAssemblyColor(
-    assemblyNumber
-  ) {
+  function goBack() {
 
-    const colors = [
+    if (selectedVillage) {
 
-      "#ef4444",
-      "#3b82f6",
-      "#22c55e",
-      "#f59e0b",
-      "#8b5cf6",
-      "#ec4899",
-      "#14b8a6",
-      "#f97316",
-      "#06b6d4",
-      "#84cc16",
+      setSelectedVillage("");
+      setSelectedVillageFeature(null);
 
-    ];
+      setBoothLocations([]);
+      setSelectedLocation(null);
+      setSelectedBooth(null);
 
-
-    const number =
-      parseInt(
-        assemblyNumber,
-        10
+      setMapLevel(
+        "assembly"
       );
 
-
-    if (
-      Number.isNaN(number)
-    ) {
-      return colors[0];
+      return;
     }
 
 
-    return colors[
-      number % colors.length
-    ];
+    if (selectedAssembly) {
+
+      setSelectedAssembly("");
+      setSelectedAssemblyNumber("");
+
+      setSelectedAssemblyFeature(null);
+
+      setSelectedVillage("");
+
+      setMapLevel(
+        "district"
+      );
+
+      return;
+    }
+
+
+    if (selectedDistrict) {
+
+      setSelectedDistrict("");
+      setSelectedDistrictCode("");
+
+      setSelectedDistrictFeature(null);
+
+      setSelectedAssembly("");
+      setSelectedAssemblyNumber("");
+
+      setMapLevel(
+        "state"
+      );
+
+      return;
+    }
+
+
+    if (selectedState) {
+
+      resetMap();
+
+    }
 
   }
 
 
   // =======================================================
-  // VILLAGE COLOR
-  // =======================================================
-
-  function getVillageColor(
-    feature,
-    index
-  ) {
-
-    const colors = [
-
-      "#2563eb",
-      "#7c3aed",
-      "#db2777",
-      "#dc2626",
-      "#ea580c",
-      "#ca8a04",
-      "#16a34a",
-      "#059669",
-      "#0891b2",
-      "#4f46e5",
-      "#9333ea",
-      "#e11d48",
-      "#0d9488",
-      "#65a30d",
-      "#c026d3",
-      "#0284c7",
-
-    ];
-
-
-    const villageName =
-      getVillageName(feature) || "";
-
-
-    let hash = 0;
-
-    for (
-      let i = 0;
-      i < villageName.length;
-      i++
-    ) {
-
-      hash =
-        villageName.charCodeAt(i) +
-        ((hash << 5) - hash);
-
-    }
-
-
-    const colorIndex =
-      Math.abs(
-        hash + index
-      ) % colors.length;
-
-
-    return colors[colorIndex];
-
-  }
-
-
-  // =======================================================
-  // LOADING
+  // LOADING SCREEN
   // =======================================================
 
   if (loading) {
@@ -1249,17 +1637,41 @@ export default function App() {
 
       <div className="loading-screen">
 
+        <div className="loading-logo">
+          EI
+        </div>
+
         <div className="loader"></div>
 
         <h2>
-          Loading GIS Dashboard
+          Electoral Intelligence
         </h2>
+
+        <p>
+          Initializing GIS layers...
+        </p>
 
       </div>
 
     );
 
   }
+
+
+  // =======================================================
+  // CURRENT LEVEL
+  // =======================================================
+
+  const currentLevel =
+    selectedVillage
+      ? "Village"
+      : selectedAssembly
+      ? "Assembly"
+      : selectedDistrict
+      ? "District"
+      : selectedState
+      ? "State"
+      : "India";
 
 
   // =======================================================
@@ -1277,31 +1689,53 @@ export default function App() {
 
       <header className="header">
 
-        <div>
+        <div className="brand-area">
 
-          <div className="brand">
-            Electoral Intelligence
+          <div className="brand-icon">
+            EI
           </div>
 
-          <div className="subtitle">
-            GIS Dashboard Prototype
+          <div>
+
+            <div className="brand">
+              Electoral Intelligence
+            </div>
+
+            <div className="subtitle">
+              Geospatial Political Analytics
+            </div>
+
           </div>
 
         </div>
 
 
-        <button
-          className="reset-button"
-          onClick={resetMap}
-        >
-          Reset Map
-        </button>
+        <div className="header-right">
+
+          <div className="system-status">
+
+            <span className="status-dot"></span>
+
+            GIS SYSTEM ONLINE
+
+          </div>
+
+
+          <button
+            className="reset-button"
+            onClick={resetMap}
+          >
+            <span>↻</span>
+            Reset
+          </button>
+
+        </div>
 
       </header>
 
 
       {/* ===================================================
-          MAIN
+          BODY
       =================================================== */}
 
       <div className="main-layout">
@@ -1313,152 +1747,1148 @@ export default function App() {
 
         <aside className="sidebar">
 
+          <div className="sidebar-scroll">
 
-          <div className="section-title">
-            LOCATION EXPLORER
+
+            {/* LOCATION HEADER */}
+
+            <div className="explorer-header">
+
+              <div>
+
+                <div className="eyebrow">
+                  LOCATION EXPLORER
+                </div>
+
+                <h2>
+                  Explore Electoral Map
+                </h2>
+
+              </div>
+
+              <div className="level-badge">
+                {currentLevel}
+              </div>
+
+            </div>
+
+
+            {/* SELECTORS */}
+
+            <div className="selectors">
+
+              <SearchSelect
+                label="State"
+                value={selectedState}
+                options={stateOptions}
+                placeholder="Select state"
+                onChange={
+                  handleStateChange
+                }
+              />
+
+
+              <SearchSelect
+                label="District"
+                value={selectedDistrict}
+                options={
+                  selectedState
+                    ? districtOptions
+                    : []
+                }
+                placeholder={
+                  selectedState
+                    ? "Select district"
+                    : "Select state first"
+                }
+                disabled={
+                  !selectedState
+                }
+                onChange={
+                  handleDistrictChange
+                }
+              />
+
+
+              <SearchSelect
+                label="Assembly Constituency"
+                value={selectedAssembly}
+                options={
+                  assemblyOptions
+                }
+                placeholder={
+                  selectedDistrict
+                    ? "Select assembly"
+                    : "Select district first"
+                }
+                disabled={
+                  !selectedDistrict
+                }
+                onChange={
+                  handleAssemblyChange
+                }
+              />
+
+
+              <SearchSelect
+                label="Village"
+                value={selectedVillage}
+                options={
+                  villageOptions
+                }
+                placeholder={
+                  selectedAssembly
+                    ? villageOptions.length
+                      ? "Select village"
+                      : "No villages found"
+                    : "Select assembly first"
+                }
+                disabled={
+                  !selectedAssembly ||
+                  villageOptions.length === 0
+                }
+                onChange={
+                  handleVillageChange
+                }
+              />
+
+            </div>
+
+
+            {/* CURRENT PATH */}
+
+            <div className="path-card">
+
+              <div className="path-label">
+                CURRENT LOCATION
+              </div>
+
+              <div className="path-current">
+
+                {
+                  selectedVillage ||
+                  selectedAssembly ||
+                  selectedDistrict ||
+                  selectedState ||
+                  "India"
+                }
+
+              </div>
+
+              <div className="path-breadcrumb">
+
+                India
+
+                {selectedState &&
+                  `  /  ${selectedState}`}
+
+                {selectedDistrict &&
+                  `  /  ${selectedDistrict}`}
+
+                {selectedAssembly &&
+                  `  /  ${selectedAssembly}`}
+
+                {selectedVillage &&
+                  `  /  ${selectedVillage}`}
+
+              </div>
+
+            </div>
+
+
+            {/* BACK */}
+
+            {(selectedState ||
+              selectedDistrict ||
+              selectedAssembly ||
+              selectedVillage) && (
+
+              <button
+                className="back-button"
+                onClick={goBack}
+              >
+                ← Back to previous level
+              </button>
+
+            )}
+
+
+            {/* STATS */}
+
+            <div className="sidebar-section">
+
+              <div className="section-heading">
+                DATA OVERVIEW
+              </div>
+
+
+              <div className="stats-grid">
+
+                <div className="stat-card">
+
+                  <span className="stat-icon">
+                    ◫
+                  </span>
+
+                  <div>
+
+                    <strong>
+                      {
+                        selectedState
+                          ? districts?.features?.length || 0
+                          : "—"
+                      }
+                    </strong>
+
+                    <small>
+                      Districts
+                    </small>
+
+                  </div>
+
+                </div>
+
+
+                <div className="stat-card">
+
+                  <span className="stat-icon">
+                    ◈
+                  </span>
+
+                  <div>
+
+                    <strong>
+                      {
+                        selectedDistrict
+                          ? assemblyOptions.length
+                          : "—"
+                      }
+                    </strong>
+
+                    <small>
+                      Assemblies
+                    </small>
+
+                  </div>
+
+                </div>
+
+
+                <div className="stat-card">
+
+                  <span className="stat-icon">
+                    ⌖
+                  </span>
+
+                  <div>
+
+                    <strong>
+                      {
+                        selectedAssembly
+                          ? visibleVillages.length
+                          : "—"
+                      }
+                    </strong>
+
+                    <small>
+                      Villages
+                    </small>
+
+                  </div>
+
+                </div>
+
+
+                <div className="stat-card">
+
+                  <span className="stat-icon">
+                    ●
+                  </span>
+
+                  <div>
+
+                    <strong>
+                      {
+                        selectedVillage
+                          ? boothLocations.length
+                          : "—"
+                      }
+                    </strong>
+
+                    <small>
+                      Locations
+                    </small>
+
+                  </div>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            {/* LEGEND */}
+
+            <div className="sidebar-section">
+
+              <div className="section-heading">
+                MAP LEGEND
+              </div>
+
+
+              <div className="legend-list">
+
+                <div className="legend-row">
+
+                  <span className="legend-line state-line"></span>
+
+                  <span>
+                    State boundary
+                  </span>
+
+                </div>
+
+
+                <div className="legend-row">
+
+                  <span className="legend-line district-line"></span>
+
+                  <span>
+                    District boundary
+                  </span>
+
+                </div>
+
+
+                <div className="legend-row">
+
+                  <span className="legend-line assembly-line"></span>
+
+                  <span>
+                    Assembly boundary
+                  </span>
+
+                </div>
+
+
+                <div className="legend-row">
+
+                  <span className="legend-fill village-fill"></span>
+
+                  <span>
+                    Village boundary
+                  </span>
+
+                </div>
+
+
+                <div className="legend-row">
+
+                  <span className="legend-marker"></span>
+
+                  <span>
+                    Booth location
+                  </span>
+
+                </div>
+
+              </div>
+
+            </div>
+
+
+            {/* INSTRUCTION */}
+
+            <div className="instruction-card">
+
+              <div className="instruction-icon">
+                ✦
+              </div>
+
+              <div>
+
+                <strong>
+                  Explore the map
+                </strong>
+
+                <p>
+                  Click a boundary to
+                  drill down into the
+                  next electoral level.
+                </p>
+
+              </div>
+
+            </div>
+
           </div>
 
-
-          {/* STATE */}
-
-          <SearchSelect
-            label="State"
-            value={selectedState}
-            options={stateOptions}
-            placeholder="Select state"
-            onChange={handleStateChange}
-          />
+        </aside>
 
 
-          {/* DISTRICT */}
+        {/* =================================================
+            MAP AREA
+        ================================================= */}
 
-          <SearchSelect
-            label="District"
-            value={selectedDistrict}
-            options={districtOptions}
-            placeholder={
-              selectedState
-                ? "Select district"
-                : "Select state first"
-            }
-            disabled={!selectedState}
-            onChange={handleDistrictChange}
-          />
+        <main className="map-container">
 
 
-          {/* ASSEMBLY */}
-
-          <SearchSelect
-            label="Assembly"
-            value={selectedAssembly}
-            options={assemblyOptions}
-            placeholder={
-              selectedDistrict
-                ? "Select assembly"
-                : "Select district first"
-            }
-            disabled={!selectedDistrict}
-            onChange={handleAssemblyChange}
-          />
+          <MapContainer
+            center={[
+              22.5,
+              79.0
+            ]}
+            zoom={5}
+            minZoom={4}
+            maxZoom={18}
+            scrollWheelZoom={true}
+            zoomControl={true}
+            className="map"
+          >
 
 
-          {/* VILLAGE */}
+            {/* BASE MAP */}
 
-          <SearchSelect
-            label="Village"
-            value={selectedVillage}
-            options={villageOptions}
-            placeholder={
-              selectedAssembly
-                ? (
-                  villageOptions.length > 0
-                    ? "Select village"
-                    : "No villages found"
-                )
-                : "Select assembly first"
-            }
-            disabled={
-              !selectedAssembly ||
-              villageOptions.length === 0
-            }
-            onChange={handleVillageChange}
-          />
+            <TileLayer
+              attribution="&copy; OpenStreetMap contributors"
+              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+            />
 
 
-          {/* =================================================
-              LAYER LEGEND
-          ================================================= */}
+            {/* =================================================
+                STATE
+            ================================================= */}
 
-          <div className="layer-section">
+            {states && (
 
-            <div className="section-title">
-              MAP LAYERS
-            </div>
+              <GeoJSON
+                key="india-states"
+                data={states}
 
+                style={(feature) => {
 
-            <div className="layer-item">
-
-              <span className="layer-dot state-dot"></span>
-
-              State Boundaries
-
-            </div>
-
-
-            <div className="layer-item">
-
-              <span className="layer-dot district-dot"></span>
-
-              District Boundaries
-
-            </div>
+                  const selected =
+                    normalizeCode(
+                      getStateCode(feature)
+                    ) ===
+                    normalizeCode(
+                      selectedStateCode
+                    );
 
 
-            <div className="layer-item">
+                  return {
 
-              <span className="layer-dot assembly-dot"></span>
+                    color:
+                      selected
+                        ? "#0f172a"
+                        : "#475569",
 
-              Assembly Boundaries
+                    weight:
+                      selected
+                        ? 3
+                        : 1.4,
 
-            </div>
+                    fillColor:
+                      selected
+                        ? "#3b82f6"
+                        : "#94a3b8",
+
+                    fillOpacity:
+                      selected
+                        ? 0.20
+                        : 0.04
+
+                  };
+
+                }}
+
+                onEachFeature={(
+                  feature,
+                  layer
+                ) => {
+
+                  const name =
+                    getStateName(
+                      feature
+                    );
 
 
-            <div className="layer-item">
-
-              <span className="village-boundary-dot"></span>
-
-              Village Boundaries
-
-            </div>
-
-          </div>
+                  layer.bindTooltip(
+                    name ||
+                    "State",
+                    {
+                      sticky: true
+                    }
+                  );
 
 
-          {/* =================================================
-              LOCATION INFO
-          ================================================= */}
+                  layer.on({
 
-          <div className="location-card">
+                    click: () =>
+                      handleStateClick(
+                        feature
+                      ),
 
-            <div className="small-label">
-              CURRENT LOCATION
-            </div>
+                    mouseover: (event) => {
+
+                      event.target.setStyle({
+                        weight: 3,
+                        fillOpacity: 0.20
+                      });
+
+                    },
+
+                    mouseout: (event) => {
+
+                      const selected =
+                        normalizeCode(
+                          getStateCode(
+                            feature
+                          )
+                        ) ===
+                        normalizeCode(
+                          selectedStateCode
+                        );
 
 
-            <div className="location-value">
+                      event.target.setStyle({
 
-              {
-                selectedVillage ||
-                selectedAssembly ||
-                selectedDistrict ||
-                selectedState ||
-                "India"
+                        weight:
+                          selected
+                            ? 3
+                            : 1.4,
+
+                        fillOpacity:
+                          selected
+                            ? 0.20
+                            : 0.04
+
+                      });
+
+                    }
+
+                  });
+
+                }}
+
+              />
+
+            )}
+
+
+            {/* =================================================
+                DISTRICTS
+            ================================================= */}
+
+            {selectedState &&
+              districts && (
+
+              <GeoJSON
+                key="districts"
+                data={districts}
+
+                style={(feature) => {
+
+                  const selected =
+                    normalizeCode(
+                      getDistrictCode(
+                        feature
+                      )
+                    ) ===
+                    normalizeCode(
+                      selectedDistrictCode
+                    );
+
+
+                  return {
+
+                    color:
+                      selected
+                        ? "#111827"
+                        : "#2563eb",
+
+                    weight:
+                      selected
+                        ? 3
+                        : 1.4,
+
+                    fillColor:
+                      "#60a5fa",
+
+                    fillOpacity:
+                      selected
+                        ? 0.28
+                        : 0.05
+
+                  };
+
+                }}
+
+                onEachFeature={(
+                  feature,
+                  layer
+                ) => {
+
+                  const name =
+                    getDistrictName(
+                      feature
+                    );
+
+
+                  layer.bindTooltip(
+                    name ||
+                    "District",
+                    {
+                      sticky: true
+                    }
+                  );
+
+
+                  layer.on({
+
+                    click: () =>
+                      handleDistrictClick(
+                        feature
+                      ),
+
+                    mouseover: (event) => {
+
+                      event.target.setStyle({
+                        weight: 3,
+                        fillOpacity: 0.22
+                      });
+
+                    },
+
+                    mouseout: (event) => {
+
+                      const selected =
+                        normalizeCode(
+                          getDistrictCode(
+                            feature
+                          )
+                        ) ===
+                        normalizeCode(
+                          selectedDistrictCode
+                        );
+
+
+                      event.target.setStyle({
+
+                        weight:
+                          selected
+                            ? 3
+                            : 1.4,
+
+                        fillOpacity:
+                          selected
+                            ? 0.28
+                            : 0.05
+
+                      });
+
+                    }
+
+                  });
+
+                }}
+
+              />
+
+            )}
+
+
+            {/* =================================================
+                ASSEMBLIES
+            ================================================= */}
+
+            {selectedDistrictCode &&
+              assemblies && (
+
+              <GeoJSON
+                key={`assemblies-${selectedDistrictCode}`}
+                data={assemblies}
+
+                filter={(feature) => {
+
+                  return (
+
+                    normalizeCode(
+                      getAssemblyDistrictCode(
+                        feature
+                      )
+                    ) ===
+                    normalizeCode(
+                      selectedDistrictCode
+                    )
+
+                  );
+
+                }}
+
+                style={(feature) => {
+
+                  const acNo =
+                    getAssemblyNumber(
+                      feature
+                    );
+
+                  const selected =
+                    normalizeCode(
+                      acNo
+                    ) ===
+                    normalizeCode(
+                      selectedAssemblyNumber
+                    );
+
+                  const color =
+                    getAssemblyColor(
+                      acNo
+                    );
+
+
+                  return {
+
+                    color:
+                      selected
+                        ? "#111827"
+                        : color,
+
+                    weight:
+                      selected
+                        ? 3
+                        : 1.4,
+
+                    fillColor:
+                      color,
+
+                    fillOpacity:
+                      selected
+                        ? 0.48
+                        : 0.20
+
+                  };
+
+                }}
+
+                onEachFeature={(
+                  feature,
+                  layer
+                ) => {
+
+                  const name =
+                    getAssemblyName(
+                      feature
+                    );
+
+                  const acNo =
+                    getAssemblyNumber(
+                      feature
+                    );
+
+
+                  layer.bindTooltip(
+                    `${name || "Assembly"}${
+                      acNo
+                        ? ` • AC ${acNo}`
+                        : ""
+                    }`,
+                    {
+                      sticky: true
+                    }
+                  );
+
+
+                  layer.on({
+
+                    click: () =>
+                      handleAssemblyClick(
+                        feature
+                      ),
+
+                    mouseover: (event) => {
+
+                      event.target.setStyle({
+                        weight: 3,
+                        fillOpacity: 0.45
+                      });
+
+                    },
+
+                    mouseout: (event) => {
+
+                      const selected =
+                        normalizeCode(
+                          acNo
+                        ) ===
+                        normalizeCode(
+                          selectedAssemblyNumber
+                        );
+
+                      const color =
+                        getAssemblyColor(
+                          acNo
+                        );
+
+
+                      event.target.setStyle({
+
+                        color:
+                          selected
+                            ? "#111827"
+                            : color,
+
+                        weight:
+                          selected
+                            ? 3
+                            : 1.4,
+
+                        fillOpacity:
+                          selected
+                            ? 0.48
+                            : 0.20
+
+                      });
+
+                    }
+
+                  });
+
+                }}
+
+              />
+
+            )}
+
+
+            {/* =================================================
+                VILLAGES
+            ================================================= */}
+
+            {selectedAssemblyNumber &&
+              visibleVillages.length > 0 && (
+
+              <GeoJSON
+                key={`villages-${selectedAssemblyNumber}-${selectedVillage}`}
+                data={{
+                  type: "FeatureCollection",
+                  features:
+                    visibleVillages
+                }}
+
+                style={(feature) => {
+
+                  const index =
+                    visibleVillages.indexOf(
+                      feature
+                    );
+
+                  const color =
+                    getVillageColor(
+                      feature,
+                      index
+                    );
+
+                  const selected =
+                    String(
+                      getVillageName(
+                        feature
+                      )
+                    )
+                      .toLowerCase()
+                      .trim() ===
+                    String(
+                      selectedVillage
+                    )
+                      .toLowerCase()
+                      .trim();
+
+
+                  return {
+
+                    color:
+                      selected
+                        ? "#111827"
+                        : color,
+
+                    weight:
+                      selected
+                        ? 3
+                        : 1,
+
+                    fillColor:
+                      color,
+
+                    fillOpacity:
+                      selected
+                        ? 0.42
+                        : 0.10
+
+                  };
+
+                }}
+
+                onEachFeature={(
+                  feature,
+                  layer
+                ) => {
+
+                  const name =
+                    getVillageName(
+                      feature
+                    );
+
+
+                  layer.bindTooltip(
+                    name ||
+                    "Village",
+                    {
+                      sticky: true
+                    }
+                  );
+
+
+                  layer.on({
+
+                    click: () =>
+                      handleVillageClick(
+                        feature
+                      ),
+
+                    mouseover: (event) => {
+
+                      event.target.setStyle({
+                        weight: 3,
+                        fillOpacity: 0.30
+                      });
+
+                    },
+
+                    mouseout: (event) => {
+
+                      const selected =
+                        String(
+                          getVillageName(
+                            feature
+                          )
+                        )
+                          .toLowerCase()
+                          .trim() ===
+                        String(
+                          selectedVillage
+                        )
+                          .toLowerCase()
+                          .trim();
+
+
+                      event.target.setStyle({
+
+                        weight:
+                          selected
+                            ? 3
+                            : 1,
+
+                        fillOpacity:
+                          selected
+                            ? 0.42
+                            : 0.10
+
+                      });
+
+                    }
+
+                  });
+
+                }}
+
+              />
+
+            )}
+
+
+            {/* =================================================
+                BOOTH HOTSPOTS
+            ================================================= */}
+
+            {boothLocations.map(
+              (location, index) => {
+
+                const isSelected =
+                  selectedLocation ===
+                  location;
+
+
+                return (
+
+                  <CircleMarker
+                    key={`${location.latitude}-${location.longitude}-${index}`}
+                    center={[
+                      location.latitude,
+                      location.longitude
+                    ]}
+                    radius={
+                      isSelected
+                        ? 12
+                        : 8
+                    }
+
+                    pathOptions={{
+
+                      color:
+                        "#ffffff",
+
+                      weight: 3,
+
+                      fillColor:
+                        "#ef4444",
+
+                      fillOpacity:
+                        0.95
+
+                    }}
+
+                    eventHandlers={{
+
+                      click: () => {
+
+                        setSelectedLocation(
+                          location
+                        );
+
+                        setSelectedBooth(
+                          null
+                        );
+
+                        setBoothAnalysis(
+                          null
+                        );
+
+                      }
+
+                    }}
+
+                  >
+
+                    <Tooltip
+                      direction="top"
+                      offset={[
+                        0,
+                        -8
+                      ]}
+                    >
+
+                      <strong>
+                        {location.booths?.[0]
+                          ? getBoothName(
+                              location.booths[0]
+                            )
+                          : "Booth Location"}
+                      </strong>
+
+                      <br />
+
+                      {location.booth_count}
+                      {" "}
+                      booth
+                      {location.booth_count !== 1
+                        ? "s"
+                        : ""}
+
+                    </Tooltip>
+
+                    <Popup>
+
+                      <div className="map-popup">
+
+                        <div className="popup-title">
+                          {location.booths?.[0]
+                            ? getBoothName(
+                                location.booths[0]
+                              )
+                            : "Booth Location"}
+                        </div>
+
+                        <div className="popup-count">
+
+                          {location.booth_count}
+
+                          {" "}
+                          Booth
+                          {location.booth_count !== 1
+                            ? "s"
+                            : ""}
+
+                        </div>
+
+                        <button
+                          className="popup-button"
+                          onClick={() =>
+                            setSelectedLocation(
+                              location
+                            )
+                          }
+                        >
+                          View booth details →
+                        </button>
+
+                      </div>
+
+                    </Popup>
+
+                  </CircleMarker>
+
+                );
+
               }
+            )}
+
+
+            {/* =================================================
+                AUTO ZOOM
+            ================================================= */}
+
+            <MapController
+              selectedFeature={
+                selectedVillageFeature ||
+                selectedAssemblyFeature ||
+                selectedDistrictFeature ||
+                selectedStateFeature
+              }
+              level={mapLevel}
+            />
+
+          </MapContainer>
+
+
+          {/* =================================================
+              MAP TOP BAR
+          ================================================= */}
+
+          <div className="map-topbar">
+
+            <div className="map-location">
+
+              <span className="map-pin">
+                ◉
+              </span>
+
+              <div>
+
+                <small>
+                  CURRENT VIEW
+                </small>
+
+                <strong>
+                  {currentLevel}
+                </strong>
+
+              </div>
 
             </div>
 
 
-            <div className="breadcrumb">
+            <div className="map-breadcrumb">
 
               India
 
@@ -1480,853 +2910,358 @@ export default function App() {
 
 
           {/* =================================================
-              DATA COUNTS
+              BOOTH LOADING
           ================================================= */}
 
-          <div className="stats-card">
+          {boothLoading && (
 
-            <div className="stat-row">
+            <div className="map-loading">
 
-              <span>
-                Districts
-              </span>
+              <div className="mini-spinner"></div>
 
-              <strong>
-
-                {
-                  selectedState
-                    ? districts?.features?.length || 0
-                    : 0
-                }
-
-              </strong>
+              Loading booth locations...
 
             </div>
 
-
-            <div className="stat-row">
-
-              <span>
-                Assemblies
-              </span>
-
-              <strong>
-
-                {
-                  selectedDistrictCode
-                    ? assemblyOptions.length
-                    : "—"
-                }
-
-              </strong>
-
-            </div>
-
-
-            <div className="stat-row">
-
-              <span>
-                Villages
-              </span>
-
-              <strong>
-
-                {
-                  selectedAssemblyNumber
-                    ? visibleVillages.length
-                    : "—"
-                }
-
-              </strong>
-
-            </div>
-
-          </div>
-
-
-        </aside>
-
-
-        {/* =================================================
-            MAP
-        ================================================= */}
-
-        <main className="map-container">
-
-
-          <MapContainer
-            center={[
-              22.5,
-              79.0,
-            ]}
-            zoom={5}
-            minZoom={4}
-            maxZoom={18}
-            scrollWheelZoom={true}
-            zoomControl={true}
-            className="map"
-          >
-
-
-            {/* =================================================
-                BASE MAP
-            ================================================= */}
-
-            <TileLayer
-              attribution="&copy; OpenStreetMap contributors"
-              url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
-            />
-
-
-            {/* =================================================
-                INDIA / STATE LAYER
-            ================================================= */}
-
-            {states && (
-
-              <GeoJSON
-                key="india-states"
-                data={states}
-
-                style={(feature) => {
-
-                  const stateCode =
-                    getStateCode(feature);
-
-                  const selected =
-                    normalizeCode(stateCode) ===
-                    normalizeCode(selectedStateCode);
-
-                  return {
-
-                    color:
-                      selected
-                        ? "#0f172a"
-                        : "#475569",
-
-                    weight:
-                      selected
-                        ? 3
-                        : 1.4,
-
-                    fillColor:
-                      selected
-                        ? "#60a5fa"
-                        : "#cbd5e1",
-
-                    fillOpacity:
-                      selected
-                        ? 0.28
-                        : 0.08,
-
-                  };
-
-                }}
-
-                onEachFeature={
-                  (feature, layer) => {
-
-                    const name =
-                      getStateName(feature);
-
-                    layer.bindTooltip(
-                      name || "State",
-                      {
-                        sticky: true,
-                      }
-                    );
-
-
-                    layer.on({
-
-                      click: () => {
-
-                        handleStateClick(
-                          feature
-                        );
-
-                      },
-
-
-                      mouseover: (event) => {
-
-                        event.target.setStyle({
-
-                          weight: 3,
-
-                          fillOpacity: 0.25,
-
-                        });
-
-                      },
-
-
-                      mouseout: (event) => {
-
-                        const code =
-                          getStateCode(
-                            feature
-                          );
-
-                        const selected =
-                          normalizeCode(code) ===
-                          normalizeCode(
-                            selectedStateCode
-                          );
-
-                        event.target.setStyle({
-
-                          weight:
-                            selected
-                              ? 3
-                              : 1.4,
-
-                          fillOpacity:
-                            selected
-                              ? 0.28
-                              : 0.08,
-
-                        });
-
-                      },
-
-                    });
-
-                  }
-                }
-
-              />
-
-            )}
-
-
-            {/* =================================================
-                DISTRICT LAYER
-            ================================================= */}
-
-            {
-              selectedState &&
-              districts && (
-
-                <GeoJSON
-
-                  key="up-districts"
-
-                  data={districts}
-
-                  style={(feature) => {
-
-                    const code =
-                      getDistrictCode(
-                        feature
-                      );
-
-                    const selected =
-                      normalizeCode(code) ===
-                      normalizeCode(
-                        selectedDistrictCode
-                      );
-
-                    return {
-
-                      color:
-                        selected
-                          ? "#111827"
-                          : "#2563eb",
-
-                      weight:
-                        selected
-                          ? 3
-                          : 1.5,
-
-                      fillColor:
-                        "#60a5fa",
-
-                      fillOpacity:
-                        selected
-                          ? 0.30
-                          : 0.08,
-
-                    };
-
-                  }}
-
-                  onEachFeature={
-                    (feature, layer) => {
-
-                      const name =
-                        getDistrictName(
-                          feature
-                        );
-
-                      const code =
-                        getDistrictCode(
-                          feature
-                        );
-
-
-                      layer.bindTooltip(
-                        name || "District",
-                        {
-                          sticky: true,
-                        }
-                      );
-
-
-                      layer.on({
-
-                        click: () => {
-
-                          handleDistrictClick(
-                            feature
-                          );
-
-                        },
-
-
-                        mouseover: (event) => {
-
-                          event.target.setStyle({
-
-                            weight: 3,
-
-                            fillOpacity: 0.25,
-
-                          });
-
-                        },
-
-
-                        mouseout: (event) => {
-
-                          const selected =
-                            normalizeCode(code) ===
-                            normalizeCode(
-                              selectedDistrictCode
-                            );
-
-                          event.target.setStyle({
-
-                            weight:
-                              selected
-                                ? 3
-                                : 1.5,
-
-                            fillOpacity:
-                              selected
-                                ? 0.30
-                                : 0.08,
-
-                          });
-
-                        },
-
-                      });
-
-                    }
-                  }
-
-                />
-
-              )
-            }
-
-
-            {/* =================================================
-                ASSEMBLY LAYER
-            ================================================= */}
-
-            {
-              selectedDistrictCode &&
-              assemblies && (
-
-                <GeoJSON
-
-                  key={
-                    `assemblies-${selectedDistrictCode}`
-                  }
-
-                  data={assemblies}
-
-                  filter={(feature) => {
-
-                    const assemblyDistrictCode =
-                      getAssemblyDistrictCode(
-                        feature
-                      );
-
-                    return (
-                      normalizeCode(
-                        assemblyDistrictCode
-                      ) ===
-                      normalizeCode(
-                        selectedDistrictCode
-                      )
-                    );
-
-                  }}
-
-                  style={(feature) => {
-
-                    const acNo =
-                      getAssemblyNumber(
-                        feature
-                      );
-
-                    const selected =
-                      normalizeCode(acNo) ===
-                      normalizeCode(
-                        selectedAssemblyNumber
-                      );
-
-                    const color =
-                      getAssemblyColor(
-                        acNo
-                      );
-
-                    return {
-
-                      color:
-                        selected
-                          ? "#111827"
-                          : color,
-
-                      weight:
-                        selected
-                          ? 3
-                          : 1.3,
-
-                      fillColor:
-                        color,
-
-                      fillOpacity:
-                        selected
-                          ? 0.48
-                          : 0.22,
-
-                    };
-
-                  }}
-
-                  onEachFeature={
-                    (feature, layer) => {
-
-                      const name =
-                        getAssemblyName(
-                          feature
-                        );
-
-                      const acNo =
-                        getAssemblyNumber(
-                          feature
-                        );
-
-
-                      layer.bindTooltip(
-
-                        `${name || "Assembly"}${
-                          acNo
-                            ? ` (AC ${acNo})`
-                            : ""
-                        }`,
-
-                        {
-                          sticky: true,
-                        }
-
-                      );
-
-
-                      layer.on({
-
-                        click: () => {
-
-                          handleAssemblyClick(
-                            feature
-                          );
-
-                        },
-
-
-                        mouseover: (event) => {
-
-                          event.target.setStyle({
-
-                            weight: 3,
-
-                            fillOpacity: 0.42,
-
-                          });
-
-                        },
-
-
-                        mouseout: (event) => {
-
-                          const selected =
-                            normalizeCode(acNo) ===
-                            normalizeCode(
-                              selectedAssemblyNumber
-                            );
-
-                          const color =
-                            getAssemblyColor(
-                              acNo
-                            );
-
-                          event.target.setStyle({
-
-                            color:
-                              selected
-                                ? "#111827"
-                                : color,
-
-                            weight:
-                              selected
-                                ? 3
-                                : 1.3,
-
-                            fillOpacity:
-                              selected
-                                ? 0.48
-                                : 0.22,
-
-                          });
-
-                        },
-
-                      });
-
-                    }
-                  }
-
-                />
-
-              )
-            }
-
-
-            {/* =================================================
-                VILLAGE BOUNDARIES
-                NO HOTSPOT MARKERS
-            ================================================= */}
-
-            {
-              selectedAssemblyNumber &&
-              visibleVillages.length > 0 && (
-
-                <GeoJSON
-
-                  key={
-                    `villages-${selectedDistrictCode}-${selectedAssemblyNumber}-${selectedVillage}`
-                  }
-
-                  data={{
-                    type: "FeatureCollection",
-
-                    features:
-                      visibleVillages,
-
-                  }}
-
-                  style={(feature) => {
-
-                    const index =
-                      visibleVillages.indexOf(
-                        feature
-                      );
-
-                    const color =
-                      getVillageColor(
-                        feature,
-                        index
-                      );
-
-                    const selected =
-                      String(
-                        getVillageName(feature)
-                      )
-                        .toLowerCase()
-                        .trim() ===
-                      String(selectedVillage)
-                        .toLowerCase()
-                        .trim();
-
-                    return {
-
-                      color:
-                        selected
-                          ? "#111827"
-                          : color,
-
-                      weight:
-                        selected
-                          ? 3
-                          : 1,
-
-                      fillColor:
-                        color,
-
-                      fillOpacity:
-                        selected
-                          ? 0.48
-                          : 0.18,
-
-                    };
-
-                  }}
-
-                  onEachFeature={
-                    (feature, layer) => {
-
-                      const name =
-                        getVillageName(
-                          feature
-                        );
-
-                      const index =
-                        visibleVillages.indexOf(
-                          feature
-                        );
-
-                      const color =
-                        getVillageColor(
-                          feature,
-                          index
-                        );
-
-
-                      layer.bindTooltip(
-                        name || "Village",
-                        {
-                          sticky: true,
-                        }
-                      );
-
-
-                      layer.on({
-
-                        click: () => {
-
-                          handleVillageClick(
-                            feature
-                          );
-
-                        },
-
-
-                        mouseover: (event) => {
-
-                          event.target.setStyle({
-
-                            weight: 3,
-
-                            fillOpacity: 0.42,
-
-                          });
-
-                        },
-
-
-                        mouseout: (event) => {
-
-                          const selected =
-                            String(
-                              getVillageName(
-                                feature
-                              )
-                            )
-                              .toLowerCase()
-                              .trim() ===
-                            String(
-                              selectedVillage
-                            )
-                              .toLowerCase()
-                              .trim();
-
-                          event.target.setStyle({
-
-                            color:
-                              selected
-                                ? "#111827"
-                                : color,
-
-                            weight:
-                              selected
-                                ? 3
-                                : 1,
-
-                            fillOpacity:
-                              selected
-                                ? 0.48
-                                : 0.18,
-
-                          });
-
-                        },
-
-                      });
-
-                    }
-                  }
-
-                />
-
-              )
-            }
-
-
-            {/* =================================================
-                AUTO ZOOM
-            ================================================= */}
-
-            <MapController
-
-              selectedFeature={
-                selectedVillageFeature ||
-                selectedAssemblyFeature ||
-                selectedDistrictFeature ||
-                selectedStateFeature
-              }
-
-              level={mapLevel}
-
-            />
-
-          </MapContainer>
+          )}
 
 
           {/* =================================================
-              MAP LEVEL BADGE
+              BOOTH LOCATION PANEL
           ================================================= */}
 
-          <div className="map-info">
+          {selectedLocation && (
 
-            {
-              selectedVillage
-                ? "Village View"
-                : selectedAssembly
-                ? "Assembly View"
-                : selectedDistrict
-                ? "District View"
-                : selectedState
-                ? "State View"
-                : "India View"
-            }
+            <div className="booth-panel">
 
-          </div>
+              <div className="panel-header">
 
+                <div>
 
-          {/* =================================================
-              SELECTED LOCATION PANEL
-          ================================================= */}
+                  <div className="panel-eyebrow">
+                    POLLING LOCATION
+                  </div>
 
-          {
-            (
-              selectedState ||
-              selectedDistrict ||
-              selectedAssembly ||
-              selectedVillage
-            ) && (
+                  <h3>
 
-              <div className="selected-panel">
+                    {
+                      selectedLocation.booths?.[0]
+                        ? getBoothName(
+                            selectedLocation.booths[0]
+                          )
+                        : "Booth Location"
+                    }
 
-                <div className="panel-label">
-                  SELECTED LOCATION
+                  </h3>
+
                 </div>
 
 
-                <div className="panel-title">
-
-                  {
-                    selectedVillage ||
-                    selectedAssembly ||
-                    selectedDistrict ||
-                    selectedState
+                <button
+                  className="close-button"
+                  onClick={() =>
+                    setSelectedLocation(
+                      null
+                    )
                   }
-
-                </div>
-
-
-                <div className="panel-path">
-
-                  India
-
-                  {selectedState &&
-                    ` → ${selectedState}`}
-
-                  {selectedDistrict &&
-                    ` → ${selectedDistrict}`}
-
-                  {selectedAssembly &&
-                    ` → ${selectedAssembly}`}
-
-                  {selectedVillage &&
-                    ` → ${selectedVillage}`}
-
-                </div>
-
-
-                {
-                  selectedAssemblyNumber && (
-
-                    <div className="panel-meta">
-
-                      AC No:{" "}
-
-                      <strong>
-                        {
-                          selectedAssemblyNumber
-                        }
-                      </strong>
-
-                    </div>
-
-                  )
-                }
-
-
-                {
-                  selectedAssemblyNumber && (
-
-                    <div className="panel-meta">
-
-                      Villages:{" "}
-
-                      <strong>
-                        {
-                          visibleVillages.length
-                        }
-                      </strong>
-
-                    </div>
-
-                  )
-                }
-
-
-                {
-                  selectedVillage && (
-
-                    <div className="panel-meta village-selected-meta">
-
-                      Selected Village:{" "}
-
-                      <strong>
-                        {
-                          selectedVillage
-                        }
-                      </strong>
-
-                    </div>
-
-                  )
-                }
+                >
+                  ×
+                </button>
 
               </div>
 
-            )
-          }
+
+              <div className="booth-summary">
+
+                <div className="booth-summary-number">
+                  {selectedLocation.booth_count}
+                </div>
+
+                <div>
+
+                  <strong>
+                    Booths at this location
+                  </strong>
+
+                  <span>
+                    Same physical polling location
+                  </span>
+
+                </div>
+
+              </div>
+
+
+              <div className="booth-list">
+
+                {selectedLocation.booths?.map(
+                  (booth, index) => {
+
+                    const boothNo =
+                      getBoothNumber(
+                        booth
+                      );
+
+                    const boothName =
+                      getBoothName(
+                        booth
+                      );
+
+
+                    const selected =
+                      selectedBooth ===
+                      booth;
+
+
+                    return (
+
+                      <button
+                        key={
+                          `${boothNo}-${index}`
+                        }
+                        className={`booth-row ${
+                          selected
+                            ? "selected-booth"
+                            : ""
+                        }`}
+                        onClick={() =>
+                          loadBoothAnalysis(
+                            booth
+                          )
+                        }
+                      >
+
+                        <span className="booth-number">
+                          {boothNo ||
+                            index + 1}
+                        </span>
+
+                        <span className="booth-info">
+
+                          <strong>
+                            Booth{" "}
+                            {boothNo ||
+                              index + 1}
+                          </strong>
+
+                          <small>
+                            {boothName ||
+                              "Polling station"}
+                          </small>
+
+                        </span>
+
+                        <span className="booth-arrow">
+                          →
+                        </span>
+
+                      </button>
+
+                    );
+
+                  }
+                )}
+
+              </div>
+
+
+              {/* =============================================
+                  BOOTH ANALYSIS
+              ============================================= */}
+
+              {selectedBooth && (
+
+                <div className="analysis-panel">
+
+                  <div className="analysis-header">
+
+                    <div>
+
+                      <span>
+                        BOOTH ANALYSIS
+                      </span>
+
+                      <h3>
+                        Booth{" "}
+                        {getBoothNumber(
+                          selectedBooth
+                        )}
+                      </h3>
+
+                    </div>
+
+                    <div className="analysis-status">
+                      LIVE
+                    </div>
+
+                  </div>
+
+
+                  {boothAnalysis ? (
+
+                    <>
+
+                      <div className="analysis-location">
+
+                        <strong>
+                          {
+                            getBoothName(
+                              selectedBooth
+                            )
+                          }
+                        </strong>
+
+                        <span>
+                          {selectedVillage}
+                          {" • "}
+                          AC{" "}
+                          {selectedAssemblyNumber}
+                        </span>
+
+                      </div>
+
+
+                      <div className="analysis-grid">
+
+                        <div className="metric-card">
+
+                          <span>
+                            TOTAL VOTES
+                          </span>
+
+                          <strong>
+                            {
+                              boothAnalysis.total_votes ??
+                              "—"
+                            }
+                          </strong>
+
+                        </div>
+
+
+                        <div className="metric-card">
+
+                          <span>
+                            VOTE SHARE
+                          </span>
+
+                          <strong>
+                            {
+                              boothAnalysis.vote_share != null
+                                ? `${boothAnalysis.vote_share}%`
+                                : "—"
+                            }
+                          </strong>
+
+                        </div>
+
+
+                        <div className="metric-card">
+
+                          <span>
+                            PREVIOUS VOTES
+                          </span>
+
+                          <strong>
+                            {
+                              boothAnalysis.previous_total_votes ??
+                              "—"
+                            }
+                          </strong>
+
+                        </div>
+
+
+                        <div className="metric-card">
+
+                          <span>
+                            PREVIOUS SHARE
+                          </span>
+
+                          <strong>
+                            {
+                              boothAnalysis.previous_vote_share != null
+                                ? `${boothAnalysis.previous_vote_share}%`
+                                : "—"
+                            }
+                          </strong>
+
+                        </div>
+
+                      </div>
+
+
+                      <div className="analysis-section">
+
+                        <div className="analysis-section-title">
+                          PARTY-WISE VOTE SHARE
+                        </div>
+
+                        {boothAnalysis.parties?.map(
+                          (party, index) => (
+
+                            <div
+                              className="party-row"
+                              key={index}
+                            >
+
+                              <span>
+                                {party.party}
+                              </span>
+
+                              <div className="party-bar">
+
+                                <div
+                                  style={{
+                                    width: `${party.vote_share || 0}%`
+                                  }}
+                                />
+
+                              </div>
+
+                              <strong>
+                                {party.vote_share}%
+                              </strong>
+
+                            </div>
+
+                          )
+                        )}
+
+                      </div>
+
+                    </>
+
+                  ) : (
+
+                    <div className="analysis-placeholder">
+
+                      <div className="placeholder-icon">
+                        ◌
+                      </div>
+
+                      <strong>
+                        Booth selected
+                      </strong>
+
+                      <p>
+                        Connect the booth analysis
+                        endpoint to display vote
+                        share and previous-year
+                        electoral data.
+                      </p>
+
+                    </div>
+
+                  )}
+
+                </div>
+
+              )}
+
+            </div>
+
+          )}
 
         </main>
 
