@@ -1,4 +1,6 @@
 import geopandas as gpd
+import pandas as pd
+
 from pathlib import Path
 
 
@@ -10,6 +12,7 @@ BASE_DIR = Path(__file__).resolve().parent.parent
 
 INDIA_DIR = BASE_DIR / "INDIA"
 UP_DIR = BASE_DIR / "UTTAR PRADESH"
+
 
 
 # =========================================================
@@ -26,6 +29,14 @@ UP_DISTRICTS_FILE = (
 
 UP_ASSEMBLIES_FILE = (
     UP_DIR / "UP_SELECTED_ASSEMBLY.geojson"
+)
+
+# =========================================================
+# ASSEMBLY DASHBOARD EXCEL
+# =========================================================
+
+ASSEMBLY_DASHBOARD_FILE = (
+    UP_DIR / "Assembly_Dashboard.xlsx"
 )
 
 
@@ -61,7 +72,7 @@ def load_geojson(path: Path):
 
         gdf = gpd.read_file(path)
 
-        print("✅ GeoDataFrame loaded")
+        print(" GeoDataFrame loaded")
         print("Features:", len(gdf))
         print("Columns:", list(gdf.columns))
         print("CRS:", gdf.crs)
@@ -73,7 +84,7 @@ def load_geojson(path: Path):
         if gdf.empty:
 
             print(
-                "⚠ WARNING: GeoDataFrame is empty"
+                "WARNING: GeoDataFrame is empty"
             )
 
         # -------------------------------------------------
@@ -110,7 +121,7 @@ def load_geojson(path: Path):
             )
 
             print(
-                "✅ Missing CRS assumed as EPSG:4326"
+                "Missing CRS assumed as EPSG:4326"
             )
 
         else:
@@ -131,13 +142,13 @@ def load_geojson(path: Path):
                     )
 
                     print(
-                        "✅ Converted CRS to EPSG:4326"
+                        "Converted CRS to EPSG:4326"
                     )
 
             except Exception as crs_error:
 
                 print(
-                    "⚠ CRS check warning:",
+                    " CRS check warning:",
                     crs_error
                 )
 
@@ -173,20 +184,20 @@ def load_geojson(path: Path):
                         )
 
                         print(
-                            "✅ Geometry repair completed"
+                            " Geometry repair completed"
                         )
 
                     except Exception as repair_error:
 
                         print(
-                            "⚠ Geometry repair failed:",
+                            " Geometry repair failed:",
                             repair_error
                         )
 
             except Exception as geometry_error:
 
                 print(
-                    "⚠ Geometry validation warning:",
+                    "Geometry validation warning:",
                     geometry_error
                 )
 
@@ -223,7 +234,7 @@ def load_geojson(path: Path):
         )
 
         print(
-            "✅ GeoJSON prepared"
+            " GeoJSON prepared"
         )
 
         print(
@@ -245,7 +256,7 @@ def load_geojson(path: Path):
     except Exception as e:
 
         print(
-            "❌ Error reading GIS data:",
+            " Error reading GIS data:",
             e
         )
 
@@ -330,9 +341,10 @@ def normalize_value(value):
 # =========================================================
 # NORMALIZE CODE
 #
-# Example:
+# Examples:
 # 052  -> 52
 # AC52 -> 52
+# 52.0 -> 52
 # =========================================================
 
 def normalize_code(value):
@@ -355,7 +367,9 @@ def normalize_code(value):
     try:
 
         return str(
-            int(value)
+            int(
+                float(value)
+            )
         )
 
     except Exception:
@@ -451,3 +465,389 @@ def get_assemblies_by_district(
 
         district_name
     )
+
+
+# =========================================================
+# LOAD ASSEMBLY DASHBOARD EXCEL
+# =========================================================
+
+def load_assembly_dashboard():
+
+    print("\n========================================")
+    print("Loading Assembly Dashboard Excel")
+    print("File:", ASSEMBLY_DASHBOARD_FILE)
+    print("========================================")
+
+    # -----------------------------------------------------
+    # FILE CHECK
+    # -----------------------------------------------------
+
+    if not ASSEMBLY_DASHBOARD_FILE.exists():
+
+        print(" EXCEL FILE NOT FOUND")
+        print(
+            "Expected path:",
+            ASSEMBLY_DASHBOARD_FILE
+        )
+
+        raise FileNotFoundError(
+            f"Assembly dashboard Excel not found: "
+            f"{ASSEMBLY_DASHBOARD_FILE}"
+        )
+
+    try:
+
+        # -------------------------------------------------
+        # READ EXCEL
+        # -------------------------------------------------
+
+        df = pd.read_excel(
+            ASSEMBLY_DASHBOARD_FILE
+        )
+
+        print(" Excel loaded")
+        print("Rows:", len(df))
+        print("Columns:", list(df.columns))
+
+        # -------------------------------------------------
+        # REQUIRED COLUMNS
+        # -------------------------------------------------
+
+        required_columns = [
+
+            "AC_NO",
+            "AC_NAME",
+            "DIST_NAME",
+
+            "Booth records",
+            "total_votes",
+
+            "bjp_votes",
+            "bjp_vote_share",
+
+            "rld_votes",
+            "rld_vote_share",
+
+            "bjp_red_booths",
+            "bjp_red_percent",
+
+            "bjp_amber_booths",
+            "bjp_amber_percent",
+
+            "bjp_yellow_booths",
+            "bjp_yellow_percent",
+
+            "bjp_green_booths",
+            "bjp_green_percent",
+
+            "rld_red_booths",
+            "rld_red_percent",
+
+            "rld_amber_booths",
+            "rld_amber_percent",
+
+            "rld_yellow_booths",
+            "rld_yellow_percent",
+
+            "rld_green_booths",
+            "rld_green_percent"
+        ]
+
+        missing_columns = [
+            column
+            for column in required_columns
+            if column not in df.columns
+        ]
+
+        if missing_columns:
+
+            raise ValueError(
+                "Missing Excel columns: "
+                + ", ".join(missing_columns)
+            )
+
+        print(
+            " All required dashboard columns found"
+        )
+
+        return df
+
+    except Exception as e:
+
+        print(
+            " Error reading Assembly Dashboard Excel:",
+            e
+        )
+
+        raise
+
+
+# =========================================================
+# CLEAN EXCEL VALUE
+# =========================================================
+
+def clean_excel_value(value):
+
+    # -----------------------------------------------------
+    # NaN / None
+    # -----------------------------------------------------
+
+    if value is None:
+
+        return None
+
+    try:
+
+        if pd.isna(value):
+
+            return None
+
+    except Exception:
+
+        pass
+
+    # -----------------------------------------------------
+    # NumPy / Pandas numeric values
+    # -----------------------------------------------------
+
+    try:
+
+        if hasattr(value, "item"):
+
+            value = value.item()
+
+    except Exception:
+
+        pass
+
+    # -----------------------------------------------------
+    # Convert 50.0 -> 50
+    # -----------------------------------------------------
+
+    if isinstance(
+        value,
+        float
+    ):
+
+        if value.is_integer():
+
+            return int(value)
+
+    return value
+
+
+# =========================================================
+# GET ASSEMBLY DASHBOARD
+# =========================================================
+
+def get_assembly_dashboard(
+    ac_no
+):
+
+    # -----------------------------------------------------
+    # LOAD EXCEL
+    # -----------------------------------------------------
+
+    df = load_assembly_dashboard()
+
+    # -----------------------------------------------------
+    # NORMALIZE REQUESTED AC_NO
+    # -----------------------------------------------------
+
+    requested_ac_no = normalize_code(
+        ac_no
+    )
+
+    # -----------------------------------------------------
+    # NORMALIZE EXCEL AC_NO
+    # -----------------------------------------------------
+
+    df["_AC_NO_NORMALIZED"] = (
+        df["AC_NO"]
+        .apply(normalize_code)
+    )
+
+    # -----------------------------------------------------
+    # FIND MATCH
+    # -----------------------------------------------------
+
+    matched = df[
+        df["_AC_NO_NORMALIZED"]
+        == requested_ac_no
+    ]
+
+    if matched.empty:
+
+        return None
+
+    # -----------------------------------------------------
+    # FIRST MATCH
+    # -----------------------------------------------------
+
+    row = matched.iloc[0]
+
+    # =====================================================
+    # 1. ASSEMBLY OVERVIEW
+    # =====================================================
+
+    overview = {
+
+        "ac_no": clean_excel_value(
+            row["AC_NO"]
+        ),
+
+        "ac_name": clean_excel_value(
+            row["AC_NAME"]
+        ),
+
+        "district_name": clean_excel_value(
+            row["DIST_NAME"]
+        )
+    }
+
+    # =====================================================
+    # 2. PARTY BAND SUMMARY
+    # =====================================================
+
+    party_band_summary = {
+
+        "BJP": {
+
+            "Red": {
+
+                "booths": clean_excel_value(
+                    row["bjp_red_booths"]
+                ),
+
+                "percent": clean_excel_value(
+                    row["bjp_red_percent"]
+                )
+            },
+
+            "Amber": {
+
+                "booths": clean_excel_value(
+                    row["bjp_amber_booths"]
+                ),
+
+                "percent": clean_excel_value(
+                    row["bjp_amber_percent"]
+                )
+            },
+
+            "Yellow": {
+
+                "booths": clean_excel_value(
+                    row["bjp_yellow_booths"]
+                ),
+
+                "percent": clean_excel_value(
+                    row["bjp_yellow_percent"]
+                )
+            },
+
+            "Green": {
+
+                "booths": clean_excel_value(
+                    row["bjp_green_booths"]
+                ),
+
+                "percent": clean_excel_value(
+                    row["bjp_green_percent"]
+                )
+            }
+        },
+
+        "RLD": {
+
+            "Red": {
+
+                "booths": clean_excel_value(
+                    row["rld_red_booths"]
+                ),
+
+                "percent": clean_excel_value(
+                    row["rld_red_percent"]
+                )
+            },
+
+            "Amber": {
+
+                "booths": clean_excel_value(
+                    row["rld_amber_booths"]
+                ),
+
+                "percent": clean_excel_value(
+                    row["rld_amber_percent"]
+                )
+            },
+
+            "Yellow": {
+
+                "booths": clean_excel_value(
+                    row["rld_yellow_booths"]
+                ),
+
+                "percent": clean_excel_value(
+                    row["rld_yellow_percent"]
+                )
+            },
+
+            "Green": {
+
+                "booths": clean_excel_value(
+                    row["rld_green_booths"]
+                ),
+
+                "percent": clean_excel_value(
+                    row["rld_green_percent"]
+                )
+            }
+        }
+    }
+
+    # =====================================================
+    # 3. DATA CHECKS
+    # =====================================================
+
+    data_checks = {
+
+        "booth_records": clean_excel_value(
+            row["Booth records"]
+        ),
+
+        "total_votes": clean_excel_value(
+            row["total_votes"]
+        ),
+
+        "bjp_votes": clean_excel_value(
+            row["bjp_votes"]
+        ),
+
+        "bjp_vote_share": clean_excel_value(
+            row["bjp_vote_share"]
+        ),
+
+        "rld_votes": clean_excel_value(
+            row["rld_votes"]
+        ),
+
+        "rld_vote_share": clean_excel_value(
+            row["rld_vote_share"]
+        )
+    }
+
+    # =====================================================
+    # FINAL RESPONSE
+    # =====================================================
+
+    return {
+
+        "overview": overview,
+
+        "party_band_summary": (
+            party_band_summary
+        ),
+
+        "data_checks": data_checks
+    }
