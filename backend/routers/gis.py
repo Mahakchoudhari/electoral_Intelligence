@@ -6,6 +6,7 @@ from services.geojson_service import (
     get_up_assemblies,
     get_assemblies_by_district,
     get_assembly_dashboard,
+    get_villages_by_assembly,
 )
 
 
@@ -124,6 +125,61 @@ def assemblies_by_district(
             detail=(
                 "Failed to load assemblies "
                 f"for district {district}: {str(e)}"
+            )
+        )
+
+
+# =========================================================
+# VILLAGE HOTSPOTS BY ASSEMBLY
+#
+# Example:
+#
+# /villages/assembly/52
+#
+# AC_NO is used to filter village points.
+#
+# Assembly
+#     ↓
+#   AC_NO
+#     ↓
+# Village GeoJSON
+#     ↓
+# Village Hotspots
+#
+# =========================================================
+
+@router.get("/villages/assembly/{ac_no}")
+def villages_by_assembly(
+    ac_no: str
+):
+
+    try:
+
+        return get_villages_by_assembly(
+            ac_no
+        )
+
+    except FileNotFoundError as e:
+
+        raise HTTPException(
+            status_code=404,
+            detail=str(e)
+        )
+
+    except ValueError as e:
+
+        raise HTTPException(
+            status_code=400,
+            detail=str(e)
+        )
+
+    except Exception as e:
+
+        raise HTTPException(
+            status_code=500,
+            detail=(
+                "Failed to load village hotspots "
+                f"for AC_NO {ac_no}: {str(e)}"
             )
         )
 

@@ -32,6 +32,14 @@ UP_ASSEMBLIES_FILE = (
 )
 
 # =========================================================
+# VILLAGE HOTSPOTS
+# =========================================================
+
+VILLAGES_FILE = (
+    UP_DIR / "BAGHPAT_AC52_VILLAGES.geojson"
+)
+
+# =========================================================
 # ASSEMBLY DASHBOARD EXCEL
 # =========================================================
 
@@ -295,6 +303,81 @@ def get_up_assemblies():
         UP_ASSEMBLIES_FILE
     )
 
+# =========================================================
+# VILLAGE HOTSPOTS BY ASSEMBLY
+# =========================================================
+
+def get_villages_by_assembly(
+    ac_no
+):
+
+    # -----------------------------------------------------
+    # LOAD VILLAGE HOTSPOTS
+    # -----------------------------------------------------
+
+    data = load_geojson(
+        VILLAGES_FILE
+    )
+
+    # -----------------------------------------------------
+    # NORMALIZE AC_NO
+    # -----------------------------------------------------
+
+    requested_ac_no = normalize_code(
+        ac_no
+    )
+
+    # -----------------------------------------------------
+    # FILTER VILLAGE POINTS
+    # -----------------------------------------------------
+
+    features = data.get(
+        "features",
+        []
+    )
+
+    matched = []
+
+    for feature in features:
+
+        properties = feature.get(
+            "properties",
+            {}
+        )
+
+        property_name = find_property(
+            properties,
+            [
+                "AC_NO",
+                "ac_no",
+                "ACNO",
+                "acno"
+            ]
+        )
+
+        if property_name is None:
+            continue
+
+        actual_ac_no = normalize_code(
+            properties.get(
+                property_name
+            )
+        )
+
+        if actual_ac_no == requested_ac_no:
+
+            matched.append(
+                feature
+            )
+
+    # -----------------------------------------------------
+    # RETURN ONLY MATCHED VILLAGE HOTSPOTS
+    # -----------------------------------------------------
+
+    return {
+        "type": "FeatureCollection",
+        "features": matched
+    }
 
 # =========================================================
 # PROPERTY FINDER
