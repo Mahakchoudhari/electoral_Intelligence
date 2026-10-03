@@ -4,6 +4,8 @@ import {
   MapContainer,
   TileLayer,
   GeoJSON,
+  Marker,
+  Tooltip,
   useMap,
 } from "react-leaflet";
 
@@ -61,6 +63,78 @@ function normalizeCode(value) {
   if (!str) return "";
 
   return str.replace(/^0+/, "") || "0";
+}
+
+
+// =========================================================
+// FEATURE CENTER
+// Supports Point / Polygon / MultiPolygon village geometry
+// =========================================================
+
+function getFeatureCenter(feature) {
+  const geometry = feature?.geometry;
+
+  if (!geometry || !geometry.coordinates) {
+    return null;
+  }
+
+  const type = geometry.type;
+  const coordinates = geometry.coordinates;
+
+  // GeoJSON Point = [longitude, latitude]
+  if (type === "Point") {
+    const longitude = Number(coordinates?.[0]);
+    const latitude = Number(coordinates?.[1]);
+
+    if (Number.isFinite(latitude) && Number.isFinite(longitude)) {
+      return [latitude, longitude];
+    }
+
+    return null;
+  }
+
+  // Collect all coordinate pairs from Polygon / MultiPolygon
+  const points = [];
+
+  function collect(value) {
+    if (!Array.isArray(value)) return;
+
+    if (
+      value.length >= 2 &&
+      Number.isFinite(Number(value[0])) &&
+      Number.isFinite(Number(value[1]))
+    ) {
+      points.push([Number(value[0]), Number(value[1])]);
+      return;
+    }
+
+    value.forEach(collect);
+  }
+
+  if (type === "Polygon" || type === "MultiPolygon") {
+    collect(coordinates);
+  }
+
+  if (!points.length) {
+    return null;
+  }
+
+  // Simple geographic center of all polygon vertices.
+  // Good enough for village location pins and keeps the pin inside
+  // the village area for the normal village polygons in this dataset.
+  const longitude =
+    points.reduce((sum, point) => sum + point[0], 0) /
+    points.length;
+
+  const latitude =
+    points.reduce((sum, point) => sum + point[1], 0) /
+    points.length;
+
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+    return null;
+  }
+
+  return [latitude, longitude];
 }
 
 
@@ -381,6 +455,10 @@ function MapController({
 
         if (level === "assembly") {
           maxZoom = 12;
+        }
+
+        if (level === "village") {
+          maxZoom = 16;
         }
 
         map.flyToBounds(
@@ -1077,6 +1155,12 @@ export default function App() {
   const [assemblies, setAssemblies] =
     useState(null);
 
+  const [villages, setVillages] =
+    useState(null);
+
+  const [villageLoading, setVillageLoading] =
+    useState(false);
+
 
   // =======================================================
   // SELECTION
@@ -1099,6 +1183,12 @@ export default function App() {
 
   const [selectedAssemblyNumber, setSelectedAssemblyNumber] =
     useState("");
+
+  const [selectedVillage, setSelectedVillage] =
+    useState("");
+
+  const [selectedVillageFeature, setSelectedVillageFeature] =
+    useState(null);
 
 
   // =======================================================
@@ -1389,6 +1479,73 @@ export default function App() {
 
 
   // =======================================================
+  // LOAD VILLAGE HOTSPOTS
+  // =======================================================
+
+  useEffect(() => {
+
+    if (!selectedAssemblyNumber) {
+      setVillages(null);
+      setVillageLoading(false);
+      setSelectedVillage("");
+      setSelectedVillageFeature(null);
+      return;
+    }
+
+
+    async function loadVillages() {
+
+      try {
+
+        setVillageLoading(true);
+
+        const response =
+          await fetch(
+            `${API}/villages/assembly/${encodeURIComponent(
+              selectedAssemblyNumber
+            )}`
+          );
+
+
+        if (!response.ok) {
+          throw new Error(
+            "Failed to load village hotspots"
+          );
+        }
+
+
+        const data =
+          await response.json();
+
+
+        setVillages(data);
+
+      } catch (error) {
+
+        console.error(
+          "Village hotspot loading error:",
+          error
+        );
+
+        setVillages(null);
+
+      } finally {
+
+        setVillageLoading(false);
+
+      }
+
+    }
+
+
+    loadVillages();
+
+  }, [
+    selectedAssemblyNumber,
+  ]);
+
+
+  // =======================================================
   // IS SELECTED STATE UTTAR PRADESH?
   // =======================================================
 
@@ -1539,6 +1696,41 @@ export default function App() {
 
 
   // =======================================================
+  // VILLAGE OPTIONS
+  // =======================================================
+
+  const villageOptions =
+    useMemo(() => {
+
+      if (!villages?.features) {
+        return [];
+      }
+
+      const names = villages.features
+        .map((feature) => {
+          const properties = feature?.properties || {};
+
+          return getProperty(properties, [
+            "village_name",
+            "village",
+            "Village_Name",
+            "VILLAGE_NAME",
+            "vilname11",
+            "vilnam_soi",
+            "name",
+          ]) || "";
+        })
+        .map((name) => String(name).trim())
+        .filter(Boolean);
+
+      return [...new Set(names)].sort((a, b) =>
+        a.localeCompare(b, "en", { sensitivity: "base" })
+      );
+
+    }, [villages]);
+
+
+  // =======================================================
   // STATE CHANGE
   // =======================================================
 
@@ -1589,6 +1781,8 @@ export default function App() {
 
     setSelectedAssembly("");
     setSelectedAssemblyNumber("");
+    setSelectedVillage("");
+    setSelectedVillageFeature(null);
 
 
     setSelectedStateFeature(
@@ -1671,6 +1865,8 @@ export default function App() {
 
     setSelectedAssembly("");
     setSelectedAssemblyNumber("");
+    setSelectedVillage("");
+    setSelectedVillageFeature(null);
 
 
     setSelectedDistrictFeature(
@@ -1774,6 +1970,9 @@ export default function App() {
       )
     );
 
+    setSelectedVillage("");
+    setSelectedVillageFeature(null);
+
 
     setSelectedAssemblyFeature(
       feature
@@ -1784,6 +1983,43 @@ export default function App() {
       "assembly"
     );
 
+  }
+
+
+  // =======================================================
+  // VILLAGE CHANGE
+  // =======================================================
+
+  function handleVillageChange(villageName) {
+
+    if (!selectedAssemblyNumber || !villages?.features) {
+      return;
+    }
+
+    const feature = villages.features.find((item) => {
+      const properties = item?.properties || {};
+
+      const name = getProperty(properties, [
+        "village_name",
+        "village",
+        "Village_Name",
+        "VILLAGE_NAME",
+        "vilname11",
+        "vilnam_soi",
+        "name",
+      ]) || "";
+
+      return String(name).trim().toLowerCase() ===
+        String(villageName).trim().toLowerCase();
+    });
+
+    if (!feature) {
+      return;
+    }
+
+    setSelectedVillage(villageName);
+    setSelectedVillageFeature(feature);
+    setMapLevel("village");
   }
 
 
@@ -1888,6 +2124,8 @@ export default function App() {
 
     setSelectedAssembly("");
     setSelectedAssemblyNumber("");
+    setSelectedVillage("");
+    setSelectedVillageFeature(null);
 
     setSelectedStateFeature(
       null
@@ -1928,6 +2166,8 @@ export default function App() {
 
       setSelectedAssembly("");
       setSelectedAssemblyNumber("");
+      setSelectedVillage("");
+      setSelectedVillageFeature(null);
 
       setSelectedAssemblyFeature(
         null
@@ -2030,7 +2270,9 @@ export default function App() {
   // =======================================================
 
   const currentLevel =
-    selectedAssembly
+    selectedVillage
+      ? "Village"
+      : selectedAssembly
       ? "Assembly"
       : selectedDistrict
       ? "District"
@@ -2216,6 +2458,34 @@ export default function App() {
                 }
               />
 
+              {/* VILLAGE */}
+              <SearchSelect
+                label="Village"
+                value={
+                  selectedVillage
+                }
+                options={
+                  villageOptions
+                }
+                placeholder={
+                  selectedAssembly
+                    ? villageLoading
+                      ? "Loading villages..."
+                      : villageOptions.length
+                      ? "Select village"
+                      : "No villages found"
+                    : "Select assembly first"
+                }
+                disabled={
+                  !selectedAssembly ||
+                  villageLoading ||
+                  villageOptions.length === 0
+                }
+                onChange={
+                  handleVillageChange
+                }
+              />
+
             </div>
 
 
@@ -2252,6 +2522,8 @@ export default function App() {
 
                 {selectedAssembly &&
                   ` / ${selectedAssembly}`}
+                  {selectedVillage &&
+                    ` / ${selectedVillage}`}
 
               </div>
 
@@ -2929,11 +3201,103 @@ export default function App() {
 
 
             {/* =================================================
+                SELECTED VILLAGE BOUNDARY
+                Render the actual village polygon when selected.
+            ================================================= */}
+            {selectedVillageFeature &&
+              (selectedVillageFeature.geometry?.type === "Polygon" ||
+                selectedVillageFeature.geometry?.type === "MultiPolygon") && (
+                <GeoJSON
+                  key={`selected-village-${selectedVillage}-${selectedVillageFeature.properties?.objectid || "feature"}`}
+                  data={selectedVillageFeature}
+                  style={{
+                    color: "#2563eb",
+                    weight: 3,
+                    fillColor: "#60a5fa",
+                    fillOpacity: 0.38,
+                  }}
+                />
+              )}
+
+            {/* =================================================
+                VILLAGE LOCATION HOTSPOTS
+                The source GeoJSON contains village POLYGONS, not
+                Point features. Therefore we calculate a center point
+                and place a location pin there.
+            ================================================= */}
+            {selectedAssemblyNumber &&
+              villages?.features?.length > 0 && (
+                <>
+                  {villages.features.map((feature, index) => {
+                    const properties = feature?.properties || {};
+
+                    const villageName =
+                      getProperty(properties, [
+                        "village_name",
+                        "village",
+                        "Village_Name",
+                        "VILLAGE_NAME",
+                        "vilname11",
+                        "vilnam_soi",
+                        "name",
+                      ]) || `Village ${index + 1}`;
+
+                    const position = getFeatureCenter(feature);
+
+                    if (!position) {
+                      return null;
+                    }
+
+                    const isSelected =
+                      String(selectedVillage).trim().toLowerCase() ===
+                      String(villageName).trim().toLowerCase();
+
+                    return (
+                      <Marker
+                        key={`village-hotspot-${index}-${String(villageName)}`}
+                        position={position}
+                        zIndexOffset={isSelected ? 1000 : 500}
+                        icon={L.divIcon({
+                          className: "village-location-marker",
+                          html: `
+                            <div style="width:38px;height:46px;display:flex;align-items:flex-start;justify-content:center;position:relative;">
+                              <div style="width:30px;height:30px;position:relative;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${isSelected ? "#2563eb" : "#dc2626"};border:3px solid #ffffff;box-shadow:0 4px 10px rgba(15,23,42,0.40);">
+                                <span style="position:absolute;width:10px;height:10px;background:#ffffff;border-radius:50%;top:7px;left:7px;"></span>
+                              </div>
+                              <div style="position:absolute;width:10px;height:5px;background:rgba(0,0,0,0.22);border-radius:50%;bottom:1px;"></div>
+                            </div>
+                          `,
+                          iconSize: [38, 46],
+                          iconAnchor: [19, 43],
+                        })}
+                        eventHandlers={{
+                          click: () => {
+                            setSelectedVillage(String(villageName));
+                            setSelectedVillageFeature(feature);
+                            setMapLevel("village");
+                          },
+                        }}
+                      >
+                        <Tooltip
+                          direction="top"
+                          offset={[0, -40]}
+                          opacity={1}
+                        >
+                          <strong>{villageName}</strong>
+                        </Tooltip>
+                      </Marker>
+                    );
+                  })}
+                </>
+              )}
+
+            {/* =================================================
                 AUTO ZOOM
             ================================================= */}
 
             <MapController
               selectedFeature={
+                selectedVillageFeature ||
                 selectedAssemblyFeature ||
                 selectedDistrictFeature ||
                 selectedStateFeature
@@ -2991,6 +3355,8 @@ export default function App() {
 
               {selectedAssembly &&
                 ` / ${selectedAssembly}`}
+                  {selectedVillage &&
+                    ` / ${selectedVillage}`}
 
             </div>
 

@@ -2520,3 +2520,50 @@ input {
 
   white-space: nowrap;
 }
+/* =========================================================
+   VILLAGE LOCATION HOTSPOT
+========================================================= */
+
+.village-location-marker {
+  background: transparent !important;
+  border: none !important;
+}
+
+.village-pin-wrapper {
+  width: 32px;
+  height: 40px;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+}
+
+.village-pin {
+  width: 28px;
+  height: 28px;
+  position: relative;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  background: #dc2626;
+  border: 3px solid #ffffff;
+  box-shadow:
+    0 3px 8px rgba(0, 0, 0, 0.35);
+}
+
+.village-pin span {
+  position: absolute;
+  width: 9px;
+  height: 9px;
+  background: #ffffff;
+  border-radius: 50%;
+  top: 7px;
+  left: 7px;
+}
+
+.village-pin-wrapper::after {
+  content: "";
+  position: absolute;
+  width: 8px;
+  height: 4px;
+  background: rgba(0, 0, 0, 0.22);
+  border-radius: 50%;
+  bottom: 0;
