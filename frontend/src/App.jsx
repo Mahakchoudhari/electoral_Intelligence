@@ -3088,7 +3088,7 @@ export default function App() {
 
                         fillOpacity:
                           selected
-                            ? 0.48
+                            ? 0.22
                             : 0.20,
 
                       };
@@ -3183,7 +3183,7 @@ export default function App() {
 
                               fillOpacity:
                                 selected
-                                  ? 0.48
+                                  ? 0.22
                                   : 0.20,
 
                             });
@@ -3214,7 +3214,7 @@ export default function App() {
                     color: "#2563eb",
                     weight: 3,
                     fillColor: "#60a5fa",
-                    fillOpacity: 0.38,
+                    fillOpacity: 0.18,
                   }}
                 />
               )}
