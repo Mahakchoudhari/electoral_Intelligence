@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -363,7 +363,7 @@ function MapLayerControl({ layersVisible, toggleLayer, setAllLayers }) {
 // ASSEMBLY DASHBOARD
 // =========================================================
 
-function AssemblyDashboard({ data, loading, error, title, subtitle, onClose }) {
+function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onDownload }) {
   if (!data && loading) {
     return (
       <div className="assembly-dashboard">
@@ -412,7 +412,7 @@ function AssemblyDashboard({ data, loading, error, title, subtitle, onClose }) {
           <h2>{title || "Election results"}</h2>
           <div className="dashboard-subtitle">{subtitle}{election.year ? ` • ${election.year}` : ""}</div>
         </div>
-        <button className="dashboard-close" onClick={onClose} aria-label="Close dashboard">×</button>
+        <div className="dashboard-head-actions"><button type="button" className="dashboard-download" onClick={onDownload}>↓ CSV</button><button className="dashboard-close" onClick={onClose} aria-label="Close dashboard">×</button></div>
       </div>
 
       <div className="dashboard-scroll">
@@ -524,6 +524,8 @@ export default function App() {
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState("");
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [comparisonRows, setComparisonRows] = useState([]);
+  const [comparisonLoading, setComparisonLoading] = useState(false);
 
   // Load states via GraphQL
   useEffect(() => {
@@ -802,6 +804,56 @@ export default function App() {
     setDashboardOpen(false);
   }
 
+  const activeGeography = {
+    label: [selectedState, selectedDistrict, selectedAssembly, selectedVillage].filter(Boolean).join(" / ") || "India",
+    level: selectedVillage ? "village" : selectedAssemblyNumber ? "ac" : selectedDistrictCode ? "district" : "state",
+    state: selectedState || null,
+    districtCode: selectedDistrictCode || null,
+    acNo: selectedAssemblyNumber || null,
+    villageId: selectedVillageFeature?.properties?.village_id ? Number(selectedVillageFeature.properties.village_id) : null,
+  };
+
+  async function addCurrentToComparison() {
+    if (!selectedState || comparisonLoading) return;
+    if (comparisonRows.some((row) => row.label === activeGeography.label)) return;
+    setComparisonLoading(true);
+    try {
+      const data = await graphqlRequest(
+        "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level) }",
+        activeGeography
+      );
+      setComparisonRows((rows) => rows.some((row) => row.label === activeGeography.label)
+        ? rows
+        : [...rows, { ...activeGeography, data: data.pollResults }]);
+    } catch (error) {
+      setDashboardError(error.message || "Unable to load comparison results");
+    } finally {
+      setComparisonLoading(false);
+    }
+  }
+
+  function downloadReport() {
+    const rows = comparisonRows.length ? comparisonRows : (assemblyDashboard ? [{ ...activeGeography, data: assemblyDashboard }] : []);
+    const lines = [["Location", "Level", "Election", "Year", "Booths with results", "Booth records", "Electors", "Votes polled", "Valid votes", "Party", "Party votes", "Party share", "Visible layers"]];
+    const visibleLayers = LAYER_CONFIG.filter((layer) => layersVisible[layer.key]).map((layer) => layer.title).join("; ");
+    rows.forEach((row) => {
+      const data = row.data || {};
+      const parties = data.party_votes?.length ? data.party_votes : [null];
+      parties.forEach((party) => lines.push([
+        row.label, row.level, data.election?.name || data.election?.type || "", data.election?.year || "",
+        data.booths_with_results ?? "", data.booth_records ?? "", data.electors ?? "", data.votes_polled ?? "",
+        data.valid_votes ?? "", party?.party || "", party?.votes ?? "", party?.share_percent ?? "", visibleLayers,
+      ]));
+    });
+    const csv = lines.map((line) => line.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
+    const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
+    const anchor = document.createElement("a");
+    anchor.href = url;
+    anchor.download = `electoral-report-${new Date().toISOString().slice(0, 10)}.csv`;
+    anchor.click();
+    URL.revokeObjectURL(url);
+  }
+
   function resetMap() {
     setSelectedState("");
     setSelectedStateCode("");
@@ -973,6 +1025,17 @@ export default function App() {
                 {selectedVillage && ` / ${selectedVillage}`}
               </div>
             </div>
+
+            <section className="compare-tools">
+              <div className="compare-tools-heading">
+                <div><div className="path-label">COMPARE AREAS</div><strong>{comparisonRows.length} selected</strong></div>
+                <button type="button" className="compare-add" onClick={addCurrentToComparison} disabled={!selectedState || comparisonLoading || comparisonRows.some((row) => row.label === activeGeography.label)}>
+                  {comparisonLoading ? "Adding…" : "+ Add current"}
+                </button>
+              </div>
+              <p>Add a state, district, assembly or village, then navigate to another area and add it too.</p>
+              {comparisonRows.length > 0 && <div className="compare-chips">{comparisonRows.map((row) => <button type="button" key={row.label} onClick={() => setComparisonRows((items) => items.filter((item) => item.label !== row.label))} title="Remove from comparison">{row.label} <span>×</span></button>)}</div>}
+            </section>
 
             {(selectedState || selectedDistrict || selectedAssembly) && (
               <button className="back-button" onClick={goBack}>
@@ -1288,7 +1351,19 @@ export default function App() {
               title={dashboardTitle}
               subtitle={dashboardSubtitle}
               onClose={closeDashboard}
+              onDownload={downloadReport}
             />
+          )}
+          {comparisonRows.length > 0 && (
+            <section className="comparison-panel">
+              <header className="comparison-header"><div><small>AREA COMPARISON</small><strong>{comparisonRows.length} locations</strong></div><div className="comparison-actions"><button type="button" onClick={downloadReport}>↓ Download report</button><button type="button" className="comparison-clear" onClick={() => setComparisonRows([])}>Clear</button></div></header>
+              <div className="comparison-table-wrap"><table className="comparison-table"><thead><tr><th>Metric</th>{comparisonRows.map((row) => <th key={row.label}>{row.label}</th>)}</tr></thead><tbody>
+                {[["Level", (row) => row.level], ["Election", (row) => row.data?.election?.name || row.data?.election?.type || "—"], ["Year", (row) => row.data?.election?.year || "—"], ["Booths with results", (row) => formatNumber(row.data?.booths_with_results)], ["Electors", (row) => formatNumber(row.data?.electors)], ["Votes polled", (row) => formatNumber(row.data?.votes_polled)], ["Valid votes", (row) => formatNumber(row.data?.valid_votes)]].map(([label, value]) => <tr key={label}><th>{label}</th>{comparisonRows.map((row) => <td key={row.label}>{value(row)}</td>)}</tr>)}
+                <tr className="comparison-section-row"><th colSpan={comparisonRows.length + 1}>PARTY VOTE COMPARISON</th></tr>
+                {[...new Set(comparisonRows.flatMap((row) => (row.data?.party_votes || []).map((party) => party.party)))].map((partyName) => <Fragment key={partyName}><tr><th>{partyName} · Votes</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatNumber(party.votes) : "—"}</td>; })}</tr><tr><th>{partyName} · Vote share</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatPercent(party.share_percent) : "—"}</td>; })}</tr></Fragment>)}
+              </tbody></table></div>
+              <footer className="comparison-footer"><span>{LAYER_CONFIG.filter((layer) => layersVisible[layer.key]).length} of 6 map layers visible</span><button type="button" onClick={downloadReport}>Export current report as CSV</button></footer>
+            </section>
           )}
         </main>
       </div>
