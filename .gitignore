@@ -1,0 +1,46 @@
+# Local editor and operating system files
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+*.swp
+*.swo
+
+# Jupyter checkpoints and temporary office lock files
+**/.ipynb_checkpoints/
+.~lock.*#
+
+# Python caches and local environments
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+ENV/
+
+# Local environment files and logs
+.env
+.env.*
+!.env.example
+*.log
+
+# Frontend dependencies and build output
+node_modules/
+dist/
+dist-ssr/
+
+# Local-only GIS source copies and exploratory exports.
+# Keep the state outline because the dashboard serves it at runtime.
+INDIA_CSV/
+UTTAR PRADESH/
+/UTTAR PRADESH_ASSEMBLY.geojson
+/UTTAR PRADESH_DISTRICTS.geojson
+/UTTAR_PRADESH_VILLAGES_Selected.geojson
+INDIA/*
+!INDIA/INDIA_STATES.geojson
+
+# Local analysis workbooks
+*.xlsx
+*.xls

@@ -1975,9 +1975,14 @@ button:disabled {
     max-height: 65vh;
   }
 
+  .layer-panel {
+    width: 290px;
+    max-height: 65vh;
+  }
+
   .dashboard-reopen-button {
     top: 68px;
     right: 10px;
     max-width: 170px;
   }
-}
+

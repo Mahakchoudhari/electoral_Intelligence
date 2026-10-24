@@ -1,0 +1,16 @@
+[project]
+name = "backend"
+version = "0.1.0"
+description = "Electoral Intelligence Backend API"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = [
+    "asyncpg>=0.30.0",
+    "fastapi>=0.115.0",
+    "python-dotenv>=1.0.1",
+    "strawberry-graphql[fastapi]>=0.280.0",
+    "uvicorn[standard]>=0.30.0",
+]
+
+[tool.uv]
+package = false
