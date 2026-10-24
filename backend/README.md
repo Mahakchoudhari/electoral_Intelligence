@@ -9,6 +9,11 @@ uv sync
 uv run --env-file .env uvicorn app.main:app --reload --port 8000
 ```
 
+For Supabase's session pooler, the API uses a small per-worker `asyncpg` pool
+to stay below the pooler's client limit. Defaults are `DB_POOL_MIN_SIZE=1` and
+`DB_POOL_MAX_SIZE=3`; set these Render environment variables lower or higher
+only after accounting for worker and instance counts.
+
 State outlines remain file-backed from `INDIA/INDIA_STATES.geojson` (a CSV
 with embedded GeoJSON geometry is also supported), configurable through
 `GIS_STATES_FILE`. District, AC, and village boundaries are now read from

@@ -10,7 +10,16 @@ from .graphql import graphql_router
 @asynccontextmanager
 async def lifespan(application: FastAPI):
     database_url = os.getenv("DATABASE_URL")
-    application.state.pool = await asyncpg.create_pool(database_url) if database_url else None
+    if database_url:
+        pool_min_size = max(1, int(os.getenv("DB_POOL_MIN_SIZE", "1")))
+        pool_max_size = max(pool_min_size, int(os.getenv("DB_POOL_MAX_SIZE", "3")))
+        application.state.pool = await asyncpg.create_pool(
+            database_url,
+            min_size=pool_min_size,
+            max_size=pool_max_size,
+        )
+    else:
+        application.state.pool = None
     try:
         yield
     finally:
