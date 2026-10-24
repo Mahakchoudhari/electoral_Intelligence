@@ -19,7 +19,9 @@ def _configured_path(name: str, default: Path) -> Path:
     return path if path.is_absolute() else (PROJECT_ROOT / path).resolve()
 
 
-STATES_FILE = _configured_path("GIS_STATES_FILE", PROJECT_ROOT / "INDIA_CSV" / "INDIA_STATES.csv")
+STATES_FILE = _configured_path(
+    "GIS_STATES_FILE", PROJECT_ROOT / "INDIA" / "INDIA_STATES.geojson"
+)
 
 
 def _load_geojson(path: Path) -> dict[str, Any]:
