@@ -18,7 +18,21 @@ import "./index.css";
 // API
 // =========================================================
 
-const API = "http://127.0.0.1:8000/api/gis";
+
+const GRAPHQL_API = import.meta.env.VITE_GRAPHQL_API || "http://127.0.0.1:8000/graphql";
+
+async function graphqlRequest(query, variables = {}) {
+  const response = await fetch(GRAPHQL_API, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ query, variables }),
+  });
+  const payload = await response.json();
+  if (!response.ok || payload.errors?.length) {
+    throw new Error(payload.errors?.map((error) => error.message).join("; ") || "GraphQL request failed");
+  }
+  return payload.data;
+}
 
 
 // =========================================================
@@ -58,6 +72,79 @@ function normalizeCode(value) {
   return str.replace(/^0+/, "") || "0";
 }
 
+
+const STATE_FIELDS = ["STNAME", "ST_NAME", "state_name", "State_Name", "STATE"];
+const STATE_CODE_FIELDS = ["STCODE11", "ST_CODE", "State_LGD", "state_code"];
+const DISTRICT_FIELDS = ["dtname", "DTNAME", "DIST_NAME", "dtname11", "district", "district_name"];
+const DISTRICT_CODE_FIELDS = ["dtcode11", "DT_CODE", "Dist_LGD", "dist_lgd", "district_code"];
+const ASSEMBLY_FIELDS = ["AC_NAME", "ac_name", "assembly", "assembly_name", "name"];
+const ASSEMBLY_NUMBER_FIELDS = ["AC_NO", "ac_no", "acno", "ACNO", "assembly_no", "assembly_number"];
+const ASSEMBLY_DISTRICT_FIELDS = ["dtcode11", "DT_CODE", "dist_lgd", "Dist_LGD", "district_code"];
+const VILLAGE_FIELDS = ["village_name", "village", "Village_Name", "VILLAGE_NAME", "vilname11", "vilnam_soi", "name"];
+
+const getStateName = (f) => getProperty(f?.properties, STATE_FIELDS);
+const getStateCode = (f) => getProperty(f?.properties, STATE_CODE_FIELDS);
+const getDistrictName = (f) => getProperty(f?.properties, DISTRICT_FIELDS);
+const getDistrictCode = (f) => getProperty(f?.properties, DISTRICT_CODE_FIELDS);
+const getAssemblyName = (f) => getProperty(f?.properties, ASSEMBLY_FIELDS);
+const getAssemblyNumber = (f) => getProperty(f?.properties, ASSEMBLY_NUMBER_FIELDS);
+const getAssemblyDistrictCode = (f) => getProperty(f?.properties, ASSEMBLY_DISTRICT_FIELDS);
+const getVillageName = (f) => getProperty(f?.properties, VILLAGE_FIELDS);
+
+function getFeatureCenter(feature) {
+  const geometry = feature?.geometry;
+  if (!geometry?.coordinates) return null;
+
+  if (geometry.type === "Point") {
+    const [lng, lat] = geometry.coordinates.map(Number);
+    return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+  }
+
+  if (!["Polygon", "MultiPolygon"].includes(geometry.type)) return null;
+
+  const points = [];
+  function collect(value) {
+    if (!Array.isArray(value)) return;
+    if (
+      value.length >= 2 &&
+      Number.isFinite(Number(value[0])) &&
+      Number.isFinite(Number(value[1]))
+    ) {
+      points.push([Number(value[0]), Number(value[1])]);
+      return;
+    }
+    value.forEach(collect);
+  }
+
+  collect(geometry.coordinates);
+  if (!points.length) return null;
+
+  const lng = points.reduce((sum, p) => sum + p[0], 0) / points.length;
+  const lat = points.reduce((sum, p) => sum + p[1], 0) / points.length;
+  return Number.isFinite(lat) && Number.isFinite(lng) ? [lat, lng] : null;
+}
+
+function formatNumber(value) {
+  if (value === null || value === undefined || value === "") return "—";
+  const number = Number(value);
+  return Number.isNaN(number) ? value : number.toLocaleString("en-IN");
+}
+
+function formatPercent(value) {
+  return value === null || value === undefined || value === "" ? "—" : `${value}%`;
+}
+
+const ASSEMBLY_COLORS = [
+  "#2563eb", "#7c3aed", "#db2777", "#dc2626",
+  "#ea580c", "#ca8a04", "#16a34a", "#059669",
+  "#0891b2", "#4f46e5", "#9333ea", "#e11d48",
+  "#0d9488", "#65a30d", "#c026d3", "#0284c7",
+];
+
+function getAssemblyColor(number) {
+  const n = parseInt(number, 10);
+  return Number.isNaN(n) ? ASSEMBLY_COLORS[0] : ASSEMBLY_COLORS[Math.abs(n) % ASSEMBLY_COLORS.length];
+}
 
 // =========================================================
 // STATE
@@ -356,6 +443,255 @@ function MapController({
   return null;
 }
 
+<<<<<<< HEAD
+=======
+function MapInitialBounds({ featureCollection }) {
+  const map = useMap();
+
+  useEffect(() => {
+    if (!featureCollection?.features?.length) return;
+    const bounds = L.geoJSON(featureCollection).getBounds();
+    if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 4.5 });
+  }, [featureCollection, map]);
+
+  return null;
+}
+
+// =========================================================
+// MAP LAYER CONTROL
+// Placed on the LEFT side of the map
+// =========================================================
+
+const LAYER_CONFIG = [
+  { key: "osm", title: "OSM Base Map", description: "Roads, places and map background", icon: "▦", color: "#0d9488" },
+  { key: "states", title: "State Boundary", description: "State borders and outlines", icon: "⌂", color: "#64748b" },
+  { key: "districts", title: "District Boundary", description: "District borders and outlines", icon: "▤", color: "#2563eb" },
+  { key: "assemblies", title: "Assembly Boundary", description: "Constituency boundaries", icon: "▱", color: "#7c3aed" },
+  { key: "villageBoundary", title: "Village Boundary", description: "Selected village polygon", icon: "⌖", color: "#0891b2" },
+  { key: "villageHotspots", title: "Village Hotspots", description: "Village location markers", icon: "●", color: "#dc2626" },
+];
+
+function LayerSwitch({ checked, onChange }) {
+  return (
+    <button
+      type="button"
+      className={`layer-switch ${checked ? "is-on" : ""}`}
+      role="switch"
+      aria-checked={checked}
+      aria-label="Toggle map layer"
+      onClick={onChange}
+    >
+      <span />
+    </button>
+  );
+}
+
+function MapLayerControl({ layersVisible, toggleLayer, setAllLayers }) {
+  const [open, setOpen] = useState(false);
+  const activeCount = Object.values(layersVisible).filter(Boolean).length;
+
+  return (
+    <div className="map-layer-control">
+      <button
+        type="button"
+        className="layer-trigger"
+        onClick={() => setOpen((prev) => !prev)}
+        aria-expanded={open}
+      >
+        <span className="layer-trigger-icon">☷</span>
+        <span>Map Layers</span>
+        <span className="layer-count">{activeCount}</span>
+        <span className="layer-chevron">{open ? "⌃" : "⌄"}</span>
+      </button>
+
+      {open && (
+        <section className="layer-panel">
+          <header className="layer-panel-header">
+            <div>
+              <strong>Map Layer Control</strong>
+              <p>Manage your map visibility</p>
+            </div>
+            <button
+              type="button"
+              className="layer-close"
+              onClick={() => setOpen(false)}
+              aria-label="Close map layers"
+            >
+              ×
+            </button>
+          </header>
+
+          <div className="layer-status">
+            <span className={`layer-status-dot ${activeCount ? "active" : ""}`} />
+            {activeCount} of {LAYER_CONFIG.length} layers visible
+          </div>
+
+          <div className="layer-items">
+            {LAYER_CONFIG.map((layer) => {
+              const checked = Boolean(layersVisible[layer.key]);
+              return (
+                <div className={`layer-item ${checked ? "" : "layer-disabled"}`} key={layer.key}>
+                  <div
+                    className="layer-item-icon"
+                    style={{
+                      color: layer.color,
+                      background: `${layer.color}12`,
+                      borderColor: `${layer.color}35`,
+                    }}
+                  >
+                    {layer.icon}
+                  </div>
+                  <div className="layer-item-copy">
+                    <strong>{layer.title}</strong>
+                    <span>{layer.description}</span>
+                  </div>
+                  <LayerSwitch
+                    checked={checked}
+                    onChange={() => toggleLayer(layer.key)}
+                  />
+                </div>
+              );
+            })}
+          </div>
+
+          <footer className="layer-panel-footer">
+            <button type="button" className="layer-show-all" onClick={() => setAllLayers(true)}>
+              ✓ Show all
+            </button>
+            <button type="button" className="layer-hide-all" onClick={() => setAllLayers(false)}>
+              Hide all
+            </button>
+          </footer>
+        </section>
+      )}
+    </div>
+  );
+}
+
+// =========================================================
+// PARTY BAND ROW
+// =========================================================
+
+function BandRow({ band, booths, percent }) {
+  return (
+    <div className="band-row">
+      <div className="band-left">
+        <span className={`band-dot band-${band.toLowerCase()}`} />
+        <span className="band-name">{band}</span>
+      </div>
+      <div className="band-values">
+        <strong>{formatNumber(booths)}</strong>
+        <span>{formatPercent(percent)}</span>
+      </div>
+    </div>
+  );
+}
+
+// =========================================================
+// ASSEMBLY DASHBOARD
+// =========================================================
+
+function AssemblyDashboard({ data, loading, error, title, subtitle, onClose }) {
+  if (!data && loading) {
+    return (
+      <div className="assembly-dashboard">
+        <div className="dashboard-header">
+          <div>
+            <div className="dashboard-eyebrow">POLL RESULTS</div>
+            <h2>Loading...</h2>
+          </div>
+          <button className="dashboard-close" onClick={onClose} aria-label="Close dashboard">×</button>
+        </div>
+        <div className="dashboard-loading">
+          <div className="dashboard-loader" />
+          <p>Loading election results...</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="assembly-dashboard">
+        <div className="dashboard-header">
+          <div>
+            <div className="dashboard-eyebrow">POLL RESULTS</div>
+            <h2>{title || "Data unavailable"}</h2>
+          </div>
+          <button className="dashboard-close" onClick={onClose} aria-label="Close dashboard">×</button>
+        </div>
+        <div className="dashboard-error">
+          <strong>Unable to load poll results</strong>
+          <p>{error}</p>
+        </div>
+      </div>
+    );
+  }
+
+  if (!data) return null;
+
+  const election = data.election || {};
+
+  return (
+    <div className="assembly-dashboard">
+      <div className="dashboard-header">
+        <div>
+          <div className="dashboard-eyebrow">POLL RESULTS</div>
+          <h2>{title || "Election results"}</h2>
+          <div className="dashboard-subtitle">{subtitle}{election.year ? ` • ${election.year}` : ""}</div>
+        </div>
+        <button className="dashboard-close" onClick={onClose} aria-label="Close dashboard">×</button>
+      </div>
+
+      <div className="dashboard-scroll">
+        <section className="dashboard-section">
+          <div className="dashboard-section-title">01 · ELECTION</div>
+          <div className="overview-grid">
+            <div className="overview-card"><span>Election</span><strong>{election.name || election.type || "No results"}</strong></div>
+            <div className="overview-card"><span>Year</span><strong>{election.year || "—"}</strong></div>
+            <div className="overview-card"><span>Booths with results</span><strong>{formatNumber(data.booths_with_results)}</strong></div>
+          </div>
+        </section>
+
+        <section className="dashboard-section">
+          <div className="dashboard-section-title">02 · PARTY VOTE TOTALS</div>
+          <div className="party-card">
+            <div className="party-card-header"><div className="party-name">Party</div><div className="party-column-labels"><span>Votes</span><span>Share</span></div></div>
+            {(data.party_votes || []).map((party) => (
+              <div className="band-row" key={party.party}>
+                <div className="band-left"><span className="band-name">{party.party}</span></div>
+                <div className="band-values"><strong>{formatNumber(party.votes)}</strong><span>{formatPercent(party.share_percent)}</span></div>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <section className="dashboard-section">
+          <div className="dashboard-section-title">03 · POLL TOTALS</div>
+          <div className="checks-grid">
+            {[
+              ["Booth records", formatNumber(data.booth_records)],
+              ["Electors", formatNumber(data.electors)],
+              ["Votes polled", formatNumber(data.votes_polled)],
+              ["Valid votes", formatNumber(data.valid_votes)],
+            ].map(([label, value]) => (
+              <div className="check-card" key={label}>
+                <span>{label}</span>
+                <strong>{value}</strong>
+              </div>
+            ))}
+          </div>
+        </section>
+
+        <div className="dashboard-source">
+          <span className="source-dot" />
+          Results aggregated from election booths and booth results
+        </div>
+      </div>
+    </div>
+  );
+}
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
 
 // =========================================================
 // MAIN APP
@@ -370,9 +706,16 @@ export default function App() {
   const [states, setStates] = useState(null);
 
   const [districts, setDistricts] = useState(null);
+<<<<<<< HEAD
 
   const [assemblies, setAssemblies] = useState(null);
 
+=======
+  const [districtsLoading, setDistrictsLoading] = useState(true);
+  const [districtsError, setDistrictsError] = useState("");
+  const [assemblies, setAssemblies] = useState(null);
+  const [assembliesLoading, setAssembliesLoading] = useState(false);
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
   const [villages, setVillages] = useState(null);
 
 
@@ -431,6 +774,7 @@ export default function App() {
   // =======================================================
 
   const [loading, setLoading] = useState(true);
+  const [statesError, setStatesError] = useState("");
 
 
   // =======================================================
@@ -442,6 +786,7 @@ export default function App() {
     async function loadStates() {
 
       try {
+<<<<<<< HEAD
 
         const response = await fetch(
           `${API}/states`
@@ -469,6 +814,13 @@ export default function App() {
           error
         );
 
+=======
+        const data = await graphqlRequest("query { states }");
+        if (!cancelled) setStates(data.states);
+      } catch (error) {
+        console.error("State loading error:", error);
+        if (!cancelled) setStatesError(error.message || "Unable to load states");
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
       } finally {
 
         setLoading(false);
@@ -480,6 +832,7 @@ export default function App() {
 
   }, []);
 
+<<<<<<< HEAD
 
   // =======================================================
   // LOAD UP DATA
@@ -576,6 +929,143 @@ export default function App() {
   // =======================================================
   // STATE OPTIONS
   // =======================================================
+=======
+  // Load only districts in the selected state.
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedState) {
+      setDistricts(null);
+      setDistrictsLoading(false);
+      return () => { cancelled = true; };
+    }
+    setDistrictsLoading(true);
+    setDistrictsError("");
+    graphqlRequest("query ($state: String!) { districts(state: $state) }", { state: selectedState })
+      .then((data) => {
+        if (!cancelled) setDistricts(data.districts);
+      })
+      .catch((error) => {
+        if (cancelled) return;
+        console.error("District loading error:", error);
+        setDistrictsError(error.message || "Unable to load districts");
+      })
+      .finally(() => {
+        if (!cancelled) setDistrictsLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedState]);
+
+  // Fetch child ACs from the selected district on the server.
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedDistrictCode) {
+      setAssemblies(null);
+      setAssembliesLoading(false);
+      return () => { cancelled = true; };
+    }
+    setAssembliesLoading(true);
+    graphqlRequest(
+      "query ($districtCode: String!) { assemblies(districtCode: $districtCode) }",
+      { districtCode: String(selectedDistrictCode) }
+    )
+      .then((data) => {
+        if (!cancelled) setAssemblies(data.assemblies);
+      })
+      .catch((error) => {
+        if (!cancelled) {
+          console.error("Assembly loading error:", error);
+          setAssemblies(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) setAssembliesLoading(false);
+      });
+    return () => { cancelled = true; };
+  }, [selectedDistrictCode]);
+
+  // Load poll results for the deepest selected hierarchy level.
+  useEffect(() => {
+    if (!selectedState) {
+      setAssemblyDashboard(null);
+      setDashboardOpen(false);
+      setDashboardError("");
+      return;
+    }
+
+    let cancelled = false;
+    const villageId = selectedVillageFeature?.properties?.village_id;
+    const variables = {
+      state: selectedState || null,
+      districtCode: selectedDistrictCode || null,
+      acNo: selectedAssemblyNumber || null,
+      villageId: villageId ? Number(villageId) : null,
+      level: selectedVillage ? "village" : selectedAssemblyNumber ? "ac" : selectedDistrictCode ? "district" : "state",
+    };
+
+    async function loadPollResults() {
+      setDashboardLoading(true);
+      setDashboardError("");
+      setDashboardOpen(true);
+
+      try {
+        const result = await graphqlRequest(
+          "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level) }",
+          variables
+        );
+        const data = result.pollResults;
+        if (!data) throw new Error("Poll result data is unavailable");
+        if (cancelled) return;
+
+        setAssemblyDashboard(data);
+      } catch (error) {
+        if (cancelled) return;
+        console.error("Poll result loading error:", error);
+        setAssemblyDashboard(null);
+        setDashboardError(error.message || "Unable to load poll results");
+      } finally {
+        if (!cancelled) setDashboardLoading(false);
+      }
+    }
+
+    loadPollResults();
+    return () => { cancelled = true; };
+  }, [selectedState, selectedDistrictCode, selectedAssemblyNumber, selectedVillage, selectedVillageFeature]);
+
+  // Load village hotspots
+  useEffect(() => {
+    if (!selectedAssemblyNumber) {
+      setVillages(null);
+      setVillageLoading(false);
+      setSelectedVillage("");
+      setSelectedVillageFeature(null);
+      return;
+    }
+
+    let cancelled = false;
+
+    async function loadVillages() {
+      setVillageLoading(true);
+      try {
+        const result = await graphqlRequest(
+          "query ($acNo: String!) { villages(acNo: $acNo) }",
+          { acNo: String(selectedAssemblyNumber) }
+        );
+        const data = result.villages;
+        if (!cancelled) setVillages(data);
+      } catch (error) {
+        if (!cancelled) {
+          console.error("Village hotspot loading error:", error);
+          setVillages(null);
+        }
+      } finally {
+        if (!cancelled) setVillageLoading(false);
+      }
+    }
+
+    loadVillages();
+    return () => { cancelled = true; };
+  }, [selectedAssemblyNumber]);
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
 
   const stateOptions = useMemo(() => {
 
@@ -599,6 +1089,7 @@ export default function App() {
   // =======================================================
 
   const districtOptions = useMemo(() => {
+<<<<<<< HEAD
 
     if (!districts?.features) {
       return [];
@@ -739,6 +1230,16 @@ export default function App() {
   // =======================================================
   // VILLAGE OPTIONS
   // =======================================================
+=======
+    if (!districts?.features) return [];
+    return [...new Set(districts.features.map(getDistrictName).filter(Boolean))].sort();
+  }, [districts]);
+
+  const assemblyOptions = useMemo(() => {
+    if (!assemblies?.features || !selectedDistrictCode) return [];
+    return [...new Set(assemblies.features.map(getAssemblyName).filter(Boolean))].sort();
+  }, [assemblies, selectedDistrictCode]);
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
 
   const villageOptions = useMemo(() => {
 
@@ -756,6 +1257,9 @@ export default function App() {
   // =======================================================
   // STATE CHANGE
   // =======================================================
+
+  const assembliesHaveBoundaries = Boolean(assemblies?.features?.some((feature) => feature.geometry));
+  const villagesHaveGeometry = Boolean(villages?.features?.some((feature) => feature.geometry));
 
   function handleStateChange(stateName) {
 
@@ -819,6 +1323,7 @@ export default function App() {
   // =======================================================
 
   function handleDistrictChange(districtName) {
+<<<<<<< HEAD
 
     const feature =
       districts?.features?.find(
@@ -850,6 +1355,10 @@ export default function App() {
 
     setSelectedDistrict(
       districtName
+=======
+    const feature = districts?.features?.find(
+      (item) => String(getDistrictName(item)).trim().toLowerCase() === String(districtName).trim().toLowerCase()
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
     );
 
     setSelectedDistrictCode(
@@ -866,6 +1375,21 @@ export default function App() {
 
     setSelectedAssemblyFeature(null);
 
+<<<<<<< HEAD
+=======
+  function handleAssemblyChange(assemblyName) {
+    if (!selectedDistrictCode) return;
+
+    const feature = assemblies?.features?.find((item) =>
+      String(getAssemblyName(item)).trim().toLowerCase() === String(assemblyName).trim().toLowerCase()
+    );
+    if (!feature) return;
+
+    const assemblyNumber = getAssemblyNumber(feature);
+    setSelectedAssembly(assemblyName);
+    setSelectedAssemblyNumber(String(assemblyNumber));
+    setSelectedVillage("");
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
     setSelectedVillageFeature(null);
 
 
@@ -1032,6 +1556,7 @@ export default function App() {
   // =======================================================
 
   function handleDistrictClick(feature) {
+<<<<<<< HEAD
 
     const districtName =
       getDistrictName(feature);
@@ -1052,6 +1577,10 @@ export default function App() {
       districtName
     );
 
+=======
+    const name = getDistrictName(feature);
+    if (name) handleDistrictChange(name);
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
   }
 
 
@@ -1060,6 +1589,7 @@ export default function App() {
   // =======================================================
 
   function handleAssemblyClick(feature) {
+<<<<<<< HEAD
 
     const assemblyName =
       getAssemblyName(feature);
@@ -1077,6 +1607,10 @@ export default function App() {
       assemblyName
     );
 
+=======
+    const name = getAssemblyName(feature);
+    if (name) handleAssemblyChange(name);
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
   }
 
 
@@ -1132,6 +1666,7 @@ export default function App() {
 
   }
 
+<<<<<<< HEAD
 
   // =======================================================
   // ASSEMBLY COLOR
@@ -1168,6 +1703,27 @@ export default function App() {
       Number.isNaN(number)
     ) {
       return colors[0];
+=======
+  function goBack() {
+    if (selectedVillage) {
+      setSelectedVillage("");
+      setSelectedVillageFeature(null);
+      setMapLevel("assembly");
+      return;
+    }
+
+    if (selectedAssembly) {
+      setSelectedAssembly("");
+      setSelectedAssemblyNumber("");
+      setSelectedVillage("");
+      setSelectedVillageFeature(null);
+      setSelectedAssemblyFeature(null);
+      setAssemblyDashboard(null);
+      setDashboardError("");
+      setDashboardOpen(false);
+      setMapLevel("district");
+      return;
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
     }
 
 
@@ -1262,9 +1818,18 @@ export default function App() {
   }
 
 
+<<<<<<< HEAD
   // =======================================================
   // UI
   // =======================================================
+=======
+  const currentLocation =
+    selectedVillage || selectedAssembly || selectedDistrict || selectedState || "India";
+  const dashboardTitle = currentLocation;
+  const dashboardSubtitle = [selectedState, selectedDistrict, selectedAssembly, selectedVillage]
+    .filter(Boolean)
+    .join(" / ");
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
 
   return (
 
@@ -1313,9 +1878,120 @@ export default function App() {
 
         <aside className="sidebar">
 
+<<<<<<< HEAD
 
           <div className="section-title">
             LOCATION EXPLORER
+=======
+            <div className="selectors">
+              <SearchSelect
+                label="State"
+                value={selectedState}
+                options={stateOptions}
+                placeholder={loading ? "Loading states..." : statesError ? "States unavailable" : stateOptions.length ? "Select state" : "No states found"}
+                disabled={loading || stateOptions.length === 0}
+                onChange={handleStateChange}
+              />
+              <SearchSelect
+                label="District"
+                value={selectedDistrict}
+                options={districtOptions}
+                placeholder={districtsLoading ? "Loading districts..." : districtsError ? "District data unavailable" : districtOptions.length ? "Select district" : "No districts found"}
+                disabled={!selectedState || districtsLoading}
+                onChange={handleDistrictChange}
+              />
+              <SearchSelect
+                label="Assembly Constituency"
+                value={selectedAssembly}
+                options={assemblyOptions}
+                placeholder={!selectedDistrict ? "Select district first" : assembliesLoading ? "Loading assemblies..." : assemblyOptions.length ? "Select assembly" : "No assemblies found"}
+                disabled={!selectedDistrict || assembliesLoading}
+                onChange={handleAssemblyChange}
+              />
+              <SearchSelect
+                label="Village"
+                value={selectedVillage}
+                options={villageOptions}
+                placeholder={
+                  selectedAssembly
+                    ? villageLoading
+                      ? "Loading villages..."
+                      : villageOptions.length
+                      ? "Select village"
+                      : "No villages found"
+                    : "Select assembly first"
+                }
+                disabled={!selectedAssembly || villageLoading || villageOptions.length === 0}
+                onChange={handleVillageChange}
+              />
+            </div>
+
+            <div className="path-card">
+              <div className="path-label">CURRENT LOCATION</div>
+              <div className="path-current">{currentLocation}</div>
+              <div className="path-breadcrumb">
+                India
+          {selectedState && ` / ${selectedState}`}
+                {selectedDistrict && ` / ${selectedDistrict}`}
+                {selectedAssembly && ` / ${selectedAssembly}`}
+                {selectedVillage && ` / ${selectedVillage}`}
+              </div>
+            </div>
+
+            {(selectedState || selectedDistrict || selectedAssembly) && (
+              <button className="back-button" onClick={goBack}>
+                ← Back to previous level
+              </button>
+            )}
+
+            <div className="sidebar-section">
+              <div className="section-heading">DATA OVERVIEW</div>
+              <div className="stats-grid">
+                <div className="stat-card">
+                  <span className="stat-icon">◫</span>
+                  <div>
+                    <strong>{selectedState ? districts?.features?.length || 0 : "—"}</strong>
+                    <small>Districts</small>
+                  </div>
+                </div>
+                <div className="stat-card">
+                  <span className="stat-icon">◈</span>
+                  <div>
+                    <strong>{selectedDistrict ? assemblyOptions.length : "—"}</strong>
+                    <small>Assemblies</small>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <div className="sidebar-section">
+              <div className="section-heading">MAP LEGEND</div>
+              <div className="legend-list">
+                {[
+                  ["state-line", "State boundary", "states"],
+                  ["district-line", "District boundary", "districts"],
+                  ["assembly-line", "Assembly boundary", "assemblies"],
+                ].map(([className, label, layerKey]) => (
+                  <div
+                    className="legend-row"
+                    key={layerKey}
+                    style={{ opacity: layersVisible[layerKey] ? 1 : 0.4 }}
+                  >
+                    <span className={`legend-line ${className}`} />
+                    <span>{label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div className="instruction-card">
+              <div className="instruction-icon">✦</div>
+              <div>
+                <strong>Explore the map</strong>
+                <p>Click a boundary or use the selectors to explore the next electoral level.</p>
+              </div>
+            </div>
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
           </div>
 
 
@@ -1555,17 +2231,32 @@ export default function App() {
 
 
           <MapContainer
+<<<<<<< HEAD
             center={[
               22.5,
               79.0,
             ]}
             zoom={5}
+=======
+            center={[22.5, 79.0]}
+            zoom={4}
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
             minZoom={4}
             maxZoom={18}
             scrollWheelZoom={true}
             zoomControl={true}
             className="map"
           >
+<<<<<<< HEAD
+=======
+            <MapInitialBounds featureCollection={states} />
+            {layersVisible.osm && (
+              <TileLayer
+                attribution="&copy; OpenStreetMap contributors"
+                url="https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png"
+              />
+            )}
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
 
 
             {/* =================================================
@@ -1699,6 +2390,7 @@ export default function App() {
 
             )}
 
+<<<<<<< HEAD
 
             {/* =================================================
                 DISTRICT LAYER
@@ -1837,10 +2529,46 @@ export default function App() {
             ================================================= */}
 
             {
+=======
+            {layersVisible.districts && districts && (
+              <GeoJSON
+                key={`districts-${selectedStateCode}`}
+                data={districts}
+                style={(feature) => {
+                  const selected =
+                    normalizeCode(getDistrictCode(feature)) === normalizeCode(selectedDistrictCode);
+                  return {
+                    color: selected ? "#111827" : "#2563eb",
+                    weight: selected ? 3 : 1.4,
+                    fillColor: "#60a5fa",
+                    fillOpacity: selected ? 0.28 : 0.05,
+                  };
+                }}
+                onEachFeature={(feature, layer) => {
+                  layer.bindTooltip(getDistrictName(feature) || "District", { sticky: true });
+                  layer.on({
+                    click: () => handleDistrictClick(feature),
+                    mouseover: (event) => event.target.setStyle({ weight: 3, fillOpacity: 0.22 }),
+                    mouseout: (event) => {
+                      const selected =
+                        normalizeCode(getDistrictCode(feature)) === normalizeCode(selectedDistrictCode);
+                      event.target.setStyle({
+                        weight: selected ? 3 : 1.4,
+                        fillOpacity: selected ? 0.28 : 0.05,
+                      });
+                    },
+                  });
+                }}
+              />
+            )}
+
+            {layersVisible.assemblies &&
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
               selectedDistrictCode &&
               assemblies && (
 
                 <GeoJSON
+<<<<<<< HEAD
 
                   key={
                     `assemblies-${selectedDistrictCode}`
@@ -1866,6 +2594,18 @@ export default function App() {
 
                   }}
 
+=======
+                  key={`assemblies-${selectedDistrictCode}`}
+                  data={assemblies}
+                  filter={(feature) => {
+                    const districtCode = getAssemblyDistrictCode(feature);
+                    const hasDistrictCodes = assemblies.features.some((item) => {
+                      const code = getAssemblyDistrictCode(item);
+                      return code !== undefined && code !== null && code !== "";
+                    });
+                    return Boolean(feature.geometry) && (!hasDistrictCodes || normalizeCode(districtCode) === normalizeCode(selectedDistrictCode));
+                  }}
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
                   style={(feature) => {
 
                     const acNo =
@@ -2214,6 +2954,7 @@ export default function App() {
                 : "India View"
             }
 
+<<<<<<< HEAD
           </div>
 
 
@@ -2328,6 +3069,50 @@ export default function App() {
             )
           }
 
+=======
+            <div className="map-breadcrumb">
+              India
+              {selectedState && ` / ${selectedState}`}
+              {selectedDistrict && ` / ${selectedDistrict}`}
+              {selectedAssembly && ` / ${selectedAssembly}`}
+              {selectedVillage && ` / ${selectedVillage}`}
+            </div>
+            {selectedDistrict && !assembliesHaveBoundaries && (
+              <div className="map-data-notice">
+                Assembly records are available, but their boundary geometry is empty in the database. Choose an assembly from the sidebar to open its dashboard.
+              </div>
+            )}
+            {selectedAssembly && villageOptions.length > 0 && !villagesHaveGeometry && (
+              <div className="map-data-notice">
+                Village records are available, but their map geometry is empty in the database.
+              </div>
+            )}
+          </div>
+
+          {/* Reopen button appears after dashboard is closed */}
+          {selectedState && !dashboardOpen && (
+            <button
+              type="button"
+              className="dashboard-reopen-button"
+              onClick={() => setDashboardOpen(true)}
+            >
+              <span>▤</span>
+              Poll Results
+            </button>
+          )}
+
+          {/* Dashboard closes independently; selection remains active */}
+          {dashboardOpen && (
+            <AssemblyDashboard
+              data={assemblyDashboard}
+              loading={dashboardLoading}
+              error={dashboardError}
+              title={dashboardTitle}
+              subtitle={dashboardSubtitle}
+              onClose={closeDashboard}
+            />
+          )}
+>>>>>>> e967c63 (refactor : add hierarchical GIS APIs and election result dashboards)
         </main>
 
       </div>
