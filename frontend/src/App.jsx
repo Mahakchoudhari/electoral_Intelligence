@@ -430,7 +430,7 @@ function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onD
           <div className="dashboard-section-title">02 · PARTY VOTE TOTALS</div>
           <div className="party-card">
             <div className="party-card-header"><div className="party-name">Party</div><div className="party-column-labels"><span>Votes</span><span>Share</span></div></div>
-            {(data.party_votes || []).map((party) => (
+            {(data.party_votes || []).filter((party) => party.party !== "Samajwadi").map((party) => (
               <div className="band-row" key={party.party}>
                 <div className="band-left"><span className="band-name">{party.party}</span></div>
                 <div className="band-values"><strong>{formatNumber(party.votes)}</strong><span>{formatPercent(party.share_percent)}</span></div>
@@ -883,7 +883,8 @@ export default function App() {
     const visibleLayers = LAYER_CONFIG.filter((layer) => layersVisible[layer.key]).map((layer) => layer.title).join("; ");
     rows.forEach((row) => {
       const data = row.data || {};
-      const parties = data.party_votes?.length ? data.party_votes : [null];
+      const visibleParties = (data.party_votes || []).filter((party) => party.party !== "Samajwadi");
+      const parties = visibleParties.length ? visibleParties : [null];
       parties.forEach((party) => lines.push([
         row.location || row.label, row.level, data.election?.name || data.election?.type || "", data.election?.year || row.electionYear || "",
         data.booths_with_results ?? "", data.booth_records ?? "", data.electors ?? "", data.votes_polled ?? "",
@@ -1408,7 +1409,7 @@ export default function App() {
               <div className="comparison-table-wrap"><table className="comparison-table"><thead><tr><th>Metric</th>{comparisonRows.map((row) => <th key={row.label}>{row.label}</th>)}</tr></thead><tbody>
                 {[["Level", (row) => row.level], ["Election", (row) => row.data?.election?.name || row.data?.election?.type || "—"], ["Year", (row) => row.data?.election?.year || "—"], ["Booths with results", (row) => formatNumber(row.data?.booths_with_results)], ["Electors", (row) => formatNumber(row.data?.electors)], ["Votes polled", (row) => formatNumber(row.data?.votes_polled)], ["Valid votes", (row) => formatNumber(row.data?.valid_votes)]].map(([label, value]) => <tr key={label}><th>{label}</th>{comparisonRows.map((row) => <td key={row.label}>{value(row)}</td>)}</tr>)}
                 <tr className="comparison-section-row"><th colSpan={comparisonRows.length + 1}>PARTY VOTE COMPARISON</th></tr>
-                {[...new Set(comparisonRows.flatMap((row) => (row.data?.party_votes || []).map((party) => party.party)))].map((partyName) => <Fragment key={partyName}><tr><th>{partyName} · Votes</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatNumber(party.votes) : "—"}</td>; })}</tr><tr><th>{partyName} · Vote share</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatPercent(party.share_percent) : "—"}</td>; })}</tr></Fragment>)}
+                {[...new Set(comparisonRows.flatMap((row) => (row.data?.party_votes || []).filter((party) => party.party !== "Samajwadi").map((party) => party.party)))].map((partyName) => <Fragment key={partyName}><tr><th>{partyName} · Votes</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatNumber(party.votes) : "—"}</td>; })}</tr><tr><th>{partyName} · Vote share</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatPercent(party.share_percent) : "—"}</td>; })}</tr></Fragment>)}
               </tbody></table></div>
               <footer className="comparison-footer"><span>{LAYER_CONFIG.filter((layer) => layersVisible[layer.key]).length} of 6 map layers visible</span><button type="button" onClick={downloadReport}>Export current report as CSV</button></footer>
             </section>
