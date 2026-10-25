@@ -57,39 +57,19 @@ def states() -> dict[str, Any]:
 
 
 async def districts(pool: Any, state_name: str | None = None) -> dict[str, Any]:
-    if pool is None:
-        raise RuntimeError("DATABASE_URL is required for district data")
+    # The map focuses on these 16 districts. Serve their checked-in boundaries
+    # directly so district navigation does not depend on a database connection.
     selected_districts = _load_geojson(SPECIAL_DISTRICTS_FILE)
-    selected_names = sorted({
-        str(feature.get("properties", {}).get("dtname", "")).strip()
-        for feature in selected_districts["features"]
-        if feature.get("properties", {}).get("dtname")
-    })
-    rows = await pool.fetch(
-        """SELECT district_code, district_lgd, name, state_code, state_name,
-                  ST_AsGeoJSON(gis_boundary) AS geometry
-           FROM districts
-           WHERE ($1::text IS NULL OR lower(state_name) = lower($1))
-             AND name = ANY($2::text[])
-           ORDER BY name""",
-        state_name,
-        selected_names,
-    )
+    if not state_name:
+        return selected_districts
+
+    selected_state = state_name.strip().casefold()
     return {
-        "type": "FeatureCollection",
+        **selected_districts,
         "features": [
-            {
-                "type": "Feature",
-                "geometry": json.loads(row["geometry"]),
-                "properties": {
-                    "dtname": row["name"],
-                    "dtcode11": row["district_code"],
-                    "Dist_LGD": row["district_lgd"],
-                    "stcode11": row["state_code"],
-                    "stname": row["state_name"],
-                },
-            }
-            for row in rows
+            feature for feature in selected_districts["features"]
+            if str(feature.get("properties", {}).get("stname", "")).strip().casefold()
+            == selected_state
         ],
     }
 
