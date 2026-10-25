@@ -363,8 +363,8 @@ function MapLayerControl({ layersVisible, toggleLayer, setAllLayers }) {
 // ASSEMBLY DASHBOARD
 // =========================================================
 
-function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onDownload }) {
-  if (!data && loading) {
+function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onDownload, electionYears, selectedElectionYear, onElectionYearChange }) {
+  if (loading) {
     return (
       <div className="assembly-dashboard">
         <div className="dashboard-header">
@@ -411,6 +411,7 @@ function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onD
           <div className="dashboard-eyebrow">POLL RESULTS</div>
           <h2>{title || "Election results"}</h2>
           <div className="dashboard-subtitle">{subtitle}{election.year ? ` • ${election.year}` : ""}</div>
+          <label className="year-picker"><span>Election year</span><select value={selectedElectionYear} onChange={(event) => onElectionYearChange(event.target.value)} disabled={!electionYears.length}><option value="">Latest available</option>{electionYears.map((year) => <option key={year} value={year}>{year}</option>)}</select></label>
         </div>
         <div className="dashboard-head-actions"><button type="button" className="dashboard-download" onClick={onDownload}>↓ CSV</button><button className="dashboard-close" onClick={onClose} aria-label="Close dashboard">×</button></div>
       </div>
@@ -526,6 +527,49 @@ export default function App() {
   const [dashboardOpen, setDashboardOpen] = useState(false);
   const [comparisonRows, setComparisonRows] = useState([]);
   const [comparisonLoading, setComparisonLoading] = useState(false);
+  const [electionYears, setElectionYears] = useState([]);
+  const [selectedElectionYear, setSelectedElectionYear] = useState("");
+  const [electionYearsLoading, setElectionYearsLoading] = useState(false);
+  const [electionScopeKey, setElectionScopeKey] = useState("");
+
+  const currentScope = useMemo(() => ({
+    state: selectedState || null,
+    districtCode: selectedDistrictCode || null,
+    acNo: selectedAssemblyNumber || null,
+    villageId: selectedVillageFeature?.properties?.village_id ? Number(selectedVillageFeature.properties.village_id) : null,
+    level: selectedVillage ? "village" : selectedAssemblyNumber ? "ac" : selectedDistrictCode ? "district" : "state",
+  }), [selectedState, selectedDistrictCode, selectedAssemblyNumber, selectedVillage, selectedVillageFeature]);
+  const currentScopeKey = JSON.stringify(currentScope);
+
+  useEffect(() => {
+    let cancelled = false;
+    if (!selectedState) {
+      setElectionYears([]);
+      setSelectedElectionYear("");
+      setElectionScopeKey("");
+      setElectionYearsLoading(false);
+      return () => { cancelled = true; };
+    }
+    setElectionYearsLoading(true);
+    setElectionScopeKey("");
+    graphqlRequest(
+      "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!) { electionYears(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level) }",
+      currentScope
+    ).then((data) => {
+      if (cancelled) return;
+      const years = data.electionYears || [];
+      setElectionYears(years);
+      setSelectedElectionYear((current) => years.includes(Number(current)) ? String(current) : (years[0] ? String(years[0]) : ""));
+      setElectionScopeKey(currentScopeKey);
+    }).catch((error) => {
+      if (!cancelled) {
+        console.error("Election year loading error:", error);
+        setElectionYears([]);
+        setElectionScopeKey(currentScopeKey);
+      }
+    }).finally(() => { if (!cancelled) setElectionYearsLoading(false); });
+    return () => { cancelled = true; };
+  }, [currentScope, currentScopeKey, selectedState]);
 
   // Load states via GraphQL
   useEffect(() => {
@@ -609,14 +653,12 @@ export default function App() {
       return;
     }
 
+    if (electionScopeKey !== currentScopeKey || electionYearsLoading) return;
+
     let cancelled = false;
-    const villageId = selectedVillageFeature?.properties?.village_id;
     const variables = {
-      state: selectedState || null,
-      districtCode: selectedDistrictCode || null,
-      acNo: selectedAssemblyNumber || null,
-      villageId: villageId ? Number(villageId) : null,
-      level: selectedVillage ? "village" : selectedAssemblyNumber ? "ac" : selectedDistrictCode ? "district" : "state",
+      ...currentScope,
+      electionYear: selectedElectionYear ? Number(selectedElectionYear) : null,
     };
 
     async function loadPollResults() {
@@ -626,7 +668,7 @@ export default function App() {
 
       try {
         const result = await graphqlRequest(
-          "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level) }",
+          "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!, $electionYear: Int) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level, electionYear: $electionYear) }",
           variables
         );
         const data = result.pollResults;
@@ -646,7 +688,7 @@ export default function App() {
 
     loadPollResults();
     return () => { cancelled = true; };
-  }, [selectedState, selectedDistrictCode, selectedAssemblyNumber, selectedVillage, selectedVillageFeature]);
+  }, [selectedState, currentScope, currentScopeKey, electionScopeKey, electionYearsLoading, selectedElectionYear]);
 
   // Load villages for selected AC
   useEffect(() => {
@@ -806,25 +848,28 @@ export default function App() {
 
   const activeGeography = {
     label: [selectedState, selectedDistrict, selectedAssembly, selectedVillage].filter(Boolean).join(" / ") || "India",
+    location: [selectedState, selectedDistrict, selectedAssembly, selectedVillage].filter(Boolean).join(" / ") || "India",
     level: selectedVillage ? "village" : selectedAssemblyNumber ? "ac" : selectedDistrictCode ? "district" : "state",
     state: selectedState || null,
     districtCode: selectedDistrictCode || null,
     acNo: selectedAssemblyNumber || null,
     villageId: selectedVillageFeature?.properties?.village_id ? Number(selectedVillageFeature.properties.village_id) : null,
+    electionYear: selectedElectionYear ? Number(selectedElectionYear) : null,
   };
 
   async function addCurrentToComparison() {
     if (!selectedState || comparisonLoading) return;
-    if (comparisonRows.some((row) => row.label === activeGeography.label)) return;
+    const comparisonLabel = `${activeGeography.label} · ${selectedElectionYear || "Latest"}`;
+    if (comparisonRows.some((row) => row.label === comparisonLabel)) return;
     setComparisonLoading(true);
     try {
       const data = await graphqlRequest(
-        "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level) }",
+        "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!, $electionYear: Int) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level, electionYear: $electionYear) }",
         activeGeography
       );
-      setComparisonRows((rows) => rows.some((row) => row.label === activeGeography.label)
+      setComparisonRows((rows) => rows.some((row) => row.label === comparisonLabel)
         ? rows
-        : [...rows, { ...activeGeography, data: data.pollResults }]);
+        : [...rows, { ...activeGeography, label: comparisonLabel, data: data.pollResults }]);
     } catch (error) {
       setDashboardError(error.message || "Unable to load comparison results");
     } finally {
@@ -840,7 +885,7 @@ export default function App() {
       const data = row.data || {};
       const parties = data.party_votes?.length ? data.party_votes : [null];
       parties.forEach((party) => lines.push([
-        row.label, row.level, data.election?.name || data.election?.type || "", data.election?.year || "",
+        row.location || row.label, row.level, data.election?.name || data.election?.type || "", data.election?.year || row.electionYear || "",
         data.booths_with_results ?? "", data.booth_records ?? "", data.electors ?? "", data.votes_polled ?? "",
         data.valid_votes ?? "", party?.party || "", party?.votes ?? "", party?.share_percent ?? "", visibleLayers,
       ]));
@@ -1029,7 +1074,7 @@ export default function App() {
             <section className="compare-tools">
               <div className="compare-tools-heading">
                 <div><div className="path-label">COMPARE AREAS</div><strong>{comparisonRows.length} selected</strong></div>
-                <button type="button" className="compare-add" onClick={addCurrentToComparison} disabled={!selectedState || comparisonLoading || comparisonRows.some((row) => row.label === activeGeography.label)}>
+                <button type="button" className="compare-add" onClick={addCurrentToComparison} disabled={!selectedState || comparisonLoading || electionYearsLoading || comparisonRows.some((row) => row.label === `${activeGeography.label} · ${selectedElectionYear || "Latest"}`)}>
                   {comparisonLoading ? "Adding…" : "+ Add current"}
                 </button>
               </div>
@@ -1352,6 +1397,9 @@ export default function App() {
               subtitle={dashboardSubtitle}
               onClose={closeDashboard}
               onDownload={downloadReport}
+              electionYears={electionYears}
+              selectedElectionYear={selectedElectionYear}
+              onElectionYearChange={setSelectedElectionYear}
             />
           )}
           {comparisonRows.length > 0 && (
