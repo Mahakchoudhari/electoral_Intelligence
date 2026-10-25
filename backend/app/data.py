@@ -199,6 +199,7 @@ async def poll_results(
     ac_no: str | None = None,
     village_id: int | None = None,
     level: str = "state",
+    election_year: int | None = None,
 ) -> dict[str, Any]:
     """Aggregate the latest available election results for a hierarchy scope."""
     if pool is None:
@@ -217,6 +218,7 @@ async def poll_results(
                SELECT e.election_id, e.election_year, e.election_type, e.election_name
                FROM elections e
                WHERE EXISTS (SELECT 1 FROM scoped_booths sb WHERE sb.election_id = e.election_id)
+                 AND ($6::int IS NULL OR e.election_year = $6)
                ORDER BY e.election_year DESC, e.election_id DESC
                LIMIT 1
            )
@@ -239,6 +241,7 @@ async def poll_results(
         ac_no,
         village_id,
         level,
+        election_year,
     )
     if row is None:
         return {
@@ -279,3 +282,30 @@ async def poll_results(
             for name, votes in parties
         ],
     }
+
+
+async def election_years(
+    pool: Any,
+    state_name: str | None = None,
+    district_code: str | None = None,
+    ac_no: str | None = None,
+    village_id: int | None = None,
+    level: str = "state",
+) -> list[int]:
+    """Return election years with booths in the requested hierarchy scope."""
+    if pool is None:
+        raise RuntimeError("DATABASE_URL is required for election years")
+    rows = await pool.fetch(
+        """SELECT DISTINCT e.election_year
+           FROM elections e
+           JOIN election_booths eb USING (election_id)
+           JOIN ac a USING (ac_no)
+           JOIN districts d USING (district_code)
+           WHERE ($1::text IS NULL OR lower(d.state_name) = lower($1))
+             AND ($2::text IS NULL OR d.district_code::text = $2)
+             AND ($3::text IS NULL OR eb.ac_no::text = $3)
+             AND ($5::text <> 'village' OR ($4::bigint IS NOT NULL AND eb.village_id = $4))
+           ORDER BY e.election_year DESC""",
+        state_name, district_code, ac_no, village_id, level,
+    )
+    return [row["election_year"] for row in rows]

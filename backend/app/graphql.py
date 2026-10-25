@@ -44,8 +44,23 @@ class Query:
         ac_no: str | None = None,
         village_id: int | None = None,
         level: str = "state",
+        election_year: int | None = None,
     ) -> JSON:
         return await data.poll_results(
+            info.context["pool"], state, district_code, ac_no, village_id, level, election_year
+        )
+
+    @strawberry.field
+    async def election_years(
+        self,
+        info: strawberry.Info,
+        state: str | None = None,
+        district_code: str | None = None,
+        ac_no: str | None = None,
+        village_id: int | None = None,
+        level: str = "state",
+    ) -> JSON:
+        return await data.election_years(
             info.context["pool"], state, district_code, ac_no, village_id, level
         )
 
