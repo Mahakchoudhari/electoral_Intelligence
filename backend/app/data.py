@@ -24,7 +24,7 @@ STATES_FILE = _configured_path(
 )
 SPECIAL_DISTRICTS_FILE = _configured_path(
     "GIS_SPECIAL_DISTRICTS_FILE",
-    PROJECT_ROOT / "UTTAR PRADESH" / "UP_SELECTED_16_DISTRICTS.geojson",
+    Path(__file__).resolve().parent / "data_files" / "up_selected_16_districts.geojson",
 )
 
 
