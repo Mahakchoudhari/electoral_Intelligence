@@ -22,6 +22,10 @@ def _configured_path(name: str, default: Path) -> Path:
 STATES_FILE = _configured_path(
     "GIS_STATES_FILE", PROJECT_ROOT / "INDIA" / "INDIA_STATES.geojson"
 )
+SPECIAL_DISTRICTS_FILE = _configured_path(
+    "GIS_SPECIAL_DISTRICTS_FILE",
+    PROJECT_ROOT / "UTTAR PRADESH" / "UP_SELECTED_16_DISTRICTS.geojson",
+)
 
 
 def _load_geojson(path: Path) -> dict[str, Any]:
@@ -55,13 +59,21 @@ def states() -> dict[str, Any]:
 async def districts(pool: Any, state_name: str | None = None) -> dict[str, Any]:
     if pool is None:
         raise RuntimeError("DATABASE_URL is required for district data")
+    selected_districts = _load_geojson(SPECIAL_DISTRICTS_FILE)
+    selected_names = sorted({
+        str(feature.get("properties", {}).get("dtname", "")).strip()
+        for feature in selected_districts["features"]
+        if feature.get("properties", {}).get("dtname")
+    })
     rows = await pool.fetch(
         """SELECT district_code, district_lgd, name, state_code, state_name,
                   ST_AsGeoJSON(gis_boundary) AS geometry
            FROM districts
            WHERE ($1::text IS NULL OR lower(state_name) = lower($1))
+             AND name = ANY($2::text[])
            ORDER BY name""",
         state_name,
+        selected_names,
     )
     return {
         "type": "FeatureCollection",
