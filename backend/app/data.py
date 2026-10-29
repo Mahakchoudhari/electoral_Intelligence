@@ -108,16 +108,27 @@ async def villages(pool: Any, ac_no: str) -> dict[str, Any]:
     if pool is None:
         raise RuntimeError("DATABASE_URL is required for village data")
     rows = await pool.fetch(
-        """SELECT MIN(vb.objectid) AS objectid, MIN(vb.village_id) AS village_id,
+        """SELECT MIN(vb.objectid) AS objectid,
+                  MIN(COALESCE(link.village_id, vb.village_id)) AS village_id,
+                  array_agg(DISTINCT COALESCE(link.village_id, vb.village_id)
+                            ORDER BY COALESCE(link.village_id, vb.village_id))
+                      FILTER (WHERE COALESCE(link.village_id, vb.village_id) IS NOT NULL) AS village_ids,
                   vb.ac_no, MIN(vb.name) AS name, MIN(vb.alternate_name) AS alternate_name,
                   MIN(vb.vil_lgd) AS vil_lgd, array_agg(DISTINCT vb.district_code) AS district_codes,
                   array_agg(DISTINCT d.name ORDER BY d.name) AS district_names,
                   MAX(v.sentiment) AS sentiment,
-                  ST_AsGeoJSON(ST_Force2D(ST_Multi(ST_CollectionExtract(ST_Collect(vb.gis_object),3)))) AS geometry,
+                  ST_AsGeoJSON(ST_Force2D(ST_Multi(ST_CollectionExtract(ST_Collect(DISTINCT vb.gis_object),3)))) AS geometry,
                   array_agg(DISTINCT vb.objectid ORDER BY vb.objectid) AS source_objectids
            FROM village_boundaries vb
            JOIN districts d USING (district_code)
-           LEFT JOIN villages v USING (village_id)
+           LEFT JOIN LATERAL (
+               SELECT l.village_id
+               FROM village_boundary_village_links l
+               WHERE l.boundary_objectid = vb.objectid
+               UNION
+               SELECT vb.village_id WHERE vb.village_id IS NOT NULL
+           ) link ON TRUE
+           LEFT JOIN villages v ON v.village_id = COALESCE(link.village_id, vb.village_id)
            WHERE vb.ac_no::text = $1
            GROUP BY vb.ac_no, regexp_replace(lower(vb.name), '[^a-z0-9]', '', 'g')
            ORDER BY MIN(vb.name), MIN(vb.objectid)""",
@@ -127,7 +138,8 @@ async def villages(pool: Any, ac_no: str) -> dict[str, Any]:
         "type": "FeatureCollection",
         "features": [
             {"type": "Feature", "geometry": json.loads(row["geometry"]) if row["geometry"] else None, "properties": {
-                "village_id": row["village_id"], "objectid": row["objectid"], "ac_no": row["ac_no"],
+                "village_id": row["village_id"], "village_ids": row["village_ids"] or [],
+                "objectid": row["objectid"], "ac_no": row["ac_no"],
                 "village_name": row["name"], "name": row["name"], "alternate_name": row["alternate_name"],
                 "vil_lgd": row["vil_lgd"], "district_codes": row["district_codes"],
                 "district_names": row["district_names"], "source_objectids": row["source_objectids"],
@@ -136,6 +148,60 @@ async def villages(pool: Any, ac_no: str) -> dict[str, Any]:
             for row in rows
         ],
     }
+
+
+async def call_reports(
+    pool: Any,
+    state: str | None = None,
+    district_code: str | None = None,
+    ac_no: str | None = None,
+    village_ids: list[int] | None = None,
+    level: str = "state",
+    limit: int = 100,
+) -> list[dict[str, Any]]:
+    """Return substantive call reports for any selected geography, newest first."""
+    if pool is None:
+        raise RuntimeError("DATABASE_URL is required for call reports")
+    bounded_limit = min(max(int(limit), 1), 250)
+    rows = await pool.fetch(
+        """SELECT c.cid, c.provider, c.provider_call_id, c.created_at,
+                  c.summary, c.category, c.feedback,
+                  COALESCE(c.ac_no, ss.ac_no) AS ac_no,
+                  COALESCE(c.village_id, ss.village_id) AS village_id,
+                  a.name AS ac_name, d.name AS district_name,
+                  COALESCE(v.name, vb.name) AS village_name
+           FROM public."call" c
+           LEFT JOIN sampark_sutra ss ON ss.sid = c.sid
+           JOIN ac a ON a.ac_no = COALESCE(c.ac_no, ss.ac_no)
+           LEFT JOIN districts d ON d.district_code = a.district_code
+           LEFT JOIN villages v ON v.village_id = COALESCE(c.village_id, ss.village_id)
+           LEFT JOIN LATERAL (
+               SELECT MIN(vb.name) AS name
+               FROM village_boundaries vb
+               WHERE vb.village_id = COALESCE(c.village_id, ss.village_id)
+                 AND vb.ac_no = COALESCE(c.ac_no, ss.ac_no)
+           ) vb ON TRUE
+           WHERE lower(COALESCE(c.flag, '')) IN ('true', '1', 'yes', 'problem', 'substantive')
+             AND ($1::text IS NULL OR lower(d.state_name) = lower($1))
+             AND ($2::text IS NULL OR d.district_code::text = $2)
+             AND ($3::text IS NULL OR COALESCE(c.ac_no, ss.ac_no)::text = $3)
+             AND ($4::text <> 'village' OR (
+                 COALESCE(array_length($5::bigint[], 1), 0) > 0
+                 AND COALESCE(c.village_id, ss.village_id) = ANY($5::bigint[])
+             ))
+           ORDER BY c.created_at DESC, c.cid DESC
+           LIMIT $6""",
+        state, district_code, ac_no, level, village_ids or [], bounded_limit,
+    )
+    return [
+        {"report_id": row["cid"], "provider": row["provider"],
+         "call_id": row["provider_call_id"], "occurred_at": row["created_at"].isoformat(),
+         "issue": row["summary"], "category": row["category"],
+         "feedback": row["feedback"], "ac_no": row["ac_no"], "village_id": row["village_id"],
+         "area": row["village_name"] or row["ac_name"],
+         "district": row["district_name"]}
+        for row in rows
+    ]
 
 
 async def assembly_dashboard(pool: Any, ac_no: str) -> dict[str, Any] | None:
@@ -192,6 +258,7 @@ async def poll_results(
     village_id: int | None = None,
     level: str = "state",
     election_year: int | None = None,
+    village_ids: list[int] | None = None,
 ) -> dict[str, Any]:
     """Aggregate the latest available election results for a hierarchy scope."""
     if pool is None:
@@ -205,12 +272,15 @@ async def poll_results(
                WHERE ($1::text IS NULL OR lower(d.state_name) = lower($1))
                  AND ($2::text IS NULL OR d.district_code::text = $2)
                  AND ($3::text IS NULL OR eb.ac_no::text = $3)
-                 AND ($5::text <> 'village' OR ($4::bigint IS NOT NULL AND eb.village_id = $4))
+                 AND ($4::text <> 'village' OR (
+                     COALESCE(array_length($6::bigint[], 1), 0) > 0
+                     AND eb.village_id = ANY($6::bigint[])
+                 ))
            ), latest_election AS (
                SELECT e.election_id, e.election_year, e.election_type, e.election_name
                FROM elections e
                WHERE EXISTS (SELECT 1 FROM scoped_booths sb WHERE sb.election_id = e.election_id)
-                 AND ($6::int IS NULL OR e.election_year = $6)
+                 AND ($5::int IS NULL OR e.election_year = $5)
                ORDER BY e.election_year DESC, e.election_id DESC
                LIMIT 1
            )
@@ -231,9 +301,9 @@ async def poll_results(
         state_name,
         district_code,
         ac_no,
-        village_id,
         level,
         election_year,
+        village_ids or ([village_id] if village_id is not None else None),
     )
     if row is None:
         return {
@@ -283,6 +353,7 @@ async def election_years(
     ac_no: str | None = None,
     village_id: int | None = None,
     level: str = "state",
+    village_ids: list[int] | None = None,
 ) -> list[int]:
     """Return election years with booths in the requested hierarchy scope."""
     if pool is None:
@@ -296,8 +367,12 @@ async def election_years(
            WHERE ($1::text IS NULL OR lower(d.state_name) = lower($1))
              AND ($2::text IS NULL OR d.district_code::text = $2)
              AND ($3::text IS NULL OR eb.ac_no::text = $3)
-             AND ($5::text <> 'village' OR ($4::bigint IS NOT NULL AND eb.village_id = $4))
+             AND ($4::text <> 'village' OR (
+                 COALESCE(array_length($5::bigint[], 1), 0) > 0
+                 AND eb.village_id = ANY($5::bigint[])
+             ))
            ORDER BY e.election_year DESC""",
-        state_name, district_code, ac_no, village_id, level,
+        state_name, district_code, ac_no, level,
+        village_ids or ([village_id] if village_id is not None else None),
     )
     return [row["election_year"] for row in rows]

@@ -465,6 +465,37 @@ function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onD
   );
 }
 
+function CallReportsPanel({ reports, loading, error, title, onClose }) {
+  return (
+    <section className="call-reports-panel" aria-label="Call reported area issues">
+      <header className="call-reports-header">
+        <div>
+          <div className="dashboard-eyebrow">CALL REPORTED ISSUES</div>
+          <h2>{title}</h2>
+          <p>Newest reports first</p>
+        </div>
+        <button type="button" className="dashboard-close" onClick={onClose} aria-label="Close call reports">×</button>
+      </header>
+      <div className="call-reports-list">
+        {loading ? <div className="call-reports-empty">Loading reports…</div> : error ? (
+          <div className="call-reports-error" role="alert">Could not load call reports: {error}</div>
+        ) : reports.length ? reports.map((report) => (
+          <article className="call-report-card" key={report.report_id}>
+            <div className="call-report-meta">
+              <time dateTime={report.occurred_at}>{new Date(report.occurred_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</time>
+              {report.category && <span>{report.category}</span>}
+            </div>
+            {(report.area || report.district) && <div className="call-report-area">{[report.area, report.district].filter(Boolean).join(" · ")}</div>}
+            <p>{report.issue}</p>
+            {report.feedback && <div className="call-report-caller">Feedback: {report.feedback}</div>}
+          </article>
+        )) : <div className="call-reports-empty">No call reports for this area yet.</div>}
+      </div>
+      {!loading && !error && reports.length === 100 && <footer className="call-reports-footer">Showing the latest 100 reports.</footer>}
+    </section>
+  );
+}
+
 // =========================================================
 // MAIN APP COMPONENT
 // =========================================================
@@ -479,6 +510,7 @@ export default function App() {
 
   const [villages, setVillages] = useState(null);
   const [villageLoading, setVillageLoading] = useState(false);
+  const [villageError, setVillageError] = useState("");
 
   const [selectedState, setSelectedState] = useState("");
   const [selectedStateCode, setSelectedStateCode] = useState("");
@@ -525,6 +557,10 @@ export default function App() {
   const [dashboardLoading, setDashboardLoading] = useState(false);
   const [dashboardError, setDashboardError] = useState("");
   const [dashboardOpen, setDashboardOpen] = useState(false);
+  const [callReportsOpen, setCallReportsOpen] = useState(false);
+  const [callReports, setCallReports] = useState([]);
+  const [callReportsLoading, setCallReportsLoading] = useState(false);
+  const [callReportsError, setCallReportsError] = useState("");
   const [comparisonRows, setComparisonRows] = useState([]);
   const [comparisonLoading, setComparisonLoading] = useState(false);
   const [electionYears, setElectionYears] = useState([]);
@@ -536,10 +572,44 @@ export default function App() {
     state: selectedState || null,
     districtCode: selectedDistrictCode || null,
     acNo: selectedAssemblyNumber || null,
-    villageId: selectedVillageFeature?.properties?.village_id ? Number(selectedVillageFeature.properties.village_id) : null,
+    villageIds: selectedVillageFeature
+      ? [...new Set([
+          ...(selectedVillageFeature.properties?.village_ids || []).map(Number),
+          ...(selectedVillageFeature.properties?.village_id ? [Number(selectedVillageFeature.properties.village_id)] : []),
+        ].filter(Number.isFinite))]
+      : [],
     level: selectedVillage ? "village" : selectedAssemblyNumber ? "ac" : selectedDistrictCode ? "district" : "state",
   }), [selectedState, selectedDistrictCode, selectedAssemblyNumber, selectedVillage, selectedVillageFeature]);
   const currentScopeKey = JSON.stringify(currentScope);
+
+  useEffect(() => {
+    if (!selectedState) setCallReportsOpen(false);
+  }, [selectedState]);
+
+  const selectedVillageIds = useMemo(() => selectedVillageFeature
+    ? [...new Set([
+        ...(selectedVillageFeature.properties?.village_ids || []).map(Number),
+        ...(selectedVillageFeature.properties?.village_id ? [Number(selectedVillageFeature.properties.village_id)] : []),
+      ].filter(Number.isFinite))]
+    : [], [selectedVillageFeature]);
+
+  useEffect(() => {
+    if (!selectedState || !callReportsOpen) return undefined;
+    let cancelled = false;
+    setCallReportsLoading(true);
+    setCallReportsError("");
+    graphqlRequest(
+      "query ($state: String, $districtCode: String, $acNo: String, $villageIds: [Int!], $level: String!, $limit: Int!) { callReports(state: $state, districtCode: $districtCode, acNo: $acNo, villageIds: $villageIds, level: $level, limit: $limit) }",
+      { ...currentScope, villageIds: selectedVillage ? selectedVillageIds : [], limit: 100 }
+    ).then((result) => {
+      if (!cancelled) setCallReports(result.callReports || []);
+    }).catch((error) => {
+      if (!cancelled) setCallReportsError(error.message || "Unable to load call reports");
+    }).finally(() => {
+      if (!cancelled) setCallReportsLoading(false);
+    });
+    return () => { cancelled = true; };
+  }, [selectedState, selectedAssemblyNumber, selectedVillage, selectedVillageIds, currentScope, callReportsOpen]);
 
   useEffect(() => {
     let cancelled = false;
@@ -553,7 +623,7 @@ export default function App() {
     setElectionYearsLoading(true);
     setElectionScopeKey("");
     graphqlRequest(
-      "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!) { electionYears(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level) }",
+      "query ($state: String, $districtCode: String, $acNo: String, $villageIds: [Int!], $level: String!) { electionYears(state: $state, districtCode: $districtCode, acNo: $acNo, villageIds: $villageIds, level: $level) }",
       currentScope
     ).then((data) => {
       if (cancelled) return;
@@ -668,7 +738,7 @@ export default function App() {
 
       try {
         const result = await graphqlRequest(
-          "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!, $electionYear: Int) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level, electionYear: $electionYear) }",
+          "query ($state: String, $districtCode: String, $acNo: String, $villageIds: [Int!], $level: String!, $electionYear: Int) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageIds: $villageIds, level: $level, electionYear: $electionYear) }",
           variables
         );
         const data = result.pollResults;
@@ -695,6 +765,7 @@ export default function App() {
     if (!selectedAssemblyNumber) {
       setVillages(null);
       setVillageLoading(false);
+      setVillageError("");
       setSelectedVillage("");
       setSelectedVillageFeature(null);
       return;
@@ -704,6 +775,7 @@ export default function App() {
 
     async function loadVillages() {
       setVillageLoading(true);
+      setVillageError("");
       try {
         const result = await graphqlRequest(
           "query ($acNo: String!) { villages(acNo: $acNo) }",
@@ -715,6 +787,7 @@ export default function App() {
         if (!cancelled) {
           console.error("Village hotspot loading error:", error);
           setVillages(null);
+          setVillageError(error.message || "Unable to load village data");
         }
       } finally {
         if (!cancelled) setVillageLoading(false);
@@ -853,7 +926,12 @@ export default function App() {
     state: selectedState || null,
     districtCode: selectedDistrictCode || null,
     acNo: selectedAssemblyNumber || null,
-    villageId: selectedVillageFeature?.properties?.village_id ? Number(selectedVillageFeature.properties.village_id) : null,
+    villageIds: selectedVillageFeature
+      ? [...new Set([
+          ...(selectedVillageFeature.properties?.village_ids || []).map(Number),
+          ...(selectedVillageFeature.properties?.village_id ? [Number(selectedVillageFeature.properties.village_id)] : []),
+        ].filter(Number.isFinite))]
+      : [],
     electionYear: selectedElectionYear ? Number(selectedElectionYear) : null,
   };
 
@@ -864,7 +942,7 @@ export default function App() {
     setComparisonLoading(true);
     try {
       const data = await graphqlRequest(
-        "query ($state: String, $districtCode: String, $acNo: String, $villageId: Int, $level: String!, $electionYear: Int) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageId: $villageId, level: $level, electionYear: $electionYear) }",
+        "query ($state: String, $districtCode: String, $acNo: String, $villageIds: [Int!], $level: String!, $electionYear: Int) { pollResults(state: $state, districtCode: $districtCode, acNo: $acNo, villageIds: $villageIds, level: $level, electionYear: $electionYear) }",
         activeGeography
       );
       setComparisonRows((rows) => rows.some((row) => row.label === comparisonLabel)
@@ -1050,6 +1128,8 @@ export default function App() {
                   selectedAssembly
                     ? villageLoading
                       ? "Loading villages..."
+                      : villageError
+                      ? "Village data unavailable"
                       : villageOptions.length
                       ? "Select village"
                       : "No villages found"
@@ -1058,6 +1138,11 @@ export default function App() {
                 disabled={!selectedAssembly || villageLoading || villageOptions.length === 0}
                 onChange={handleVillageChange}
               />
+              {villageError && (
+                <div className="selector-error" role="alert">
+                  Village data could not be loaded. Check the API/database logs and confirm the village mapping SQL has been applied.
+                </div>
+              )}
             </div>
 
             <div className="path-card">
@@ -1086,6 +1171,12 @@ export default function App() {
             {(selectedState || selectedDistrict || selectedAssembly) && (
               <button className="back-button" onClick={goBack}>
                 ← Back to previous level
+              </button>
+            )}
+
+            {selectedState && (
+              <button type="button" className="call-reports-open" onClick={() => setCallReportsOpen(true)}>
+                <span>◷</span> Call reported issues
               </button>
             )}
 
@@ -1401,6 +1492,15 @@ export default function App() {
               electionYears={electionYears}
               selectedElectionYear={selectedElectionYear}
               onElectionYearChange={setSelectedElectionYear}
+            />
+          )}
+          {callReportsOpen && selectedState && (
+            <CallReportsPanel
+              reports={callReports}
+              loading={callReportsLoading}
+              error={callReportsError}
+              title={currentLocation}
+              onClose={() => setCallReportsOpen(false)}
             />
           )}
           {comparisonRows.length > 0 && (

@@ -10,6 +10,15 @@ Thumbs.db
 **/.ipynb_checkpoints/
 .~lock.*#
 
+# Test, tool, and temporary build output
+.coverage
+coverage/
+.tox/
+.nox/
+*.tmp
+*.bak
+*.orig
+
 # Python caches and local environments
 __pycache__/
 *.py[cod]
@@ -34,12 +43,21 @@ dist-ssr/
 # Local-only GIS source copies and exploratory exports.
 # Keep the state outline because the dashboard serves it at runtime.
 INDIA_CSV/
+csv_data/
+downloadDir*/
 UTTAR PRADESH/
 /UTTAR PRADESH_ASSEMBLY.geojson
 /UTTAR PRADESH_DISTRICTS.geojson
 /UTTAR_PRADESH_VILLAGES_Selected.geojson
 INDIA/*
 !INDIA/INDIA_STATES.geojson
+
+# Generated village-link review artifacts; keep the source script.
+/backend/app/data_files/village_boundary_csv_candidate_review.csv
+/backend/app/data_files/village_boundary_csv_candidate_review_summary.txt
+
+# Local database scripts and diagnostics are not part of application deploys.
+/backend/sql/
 
 # Local analysis workbooks
 *.xlsx
