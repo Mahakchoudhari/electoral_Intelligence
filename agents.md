@@ -197,24 +197,35 @@ CREATE TABLE public.sampark_sutra (
     hashed_password TEXT,
     salt TEXT,
     name TEXT,
-    flag TEXT
+    flag TEXT,
+    village_id BIGINT REFERENCES public.villages(village_id),
+    fathers_name TEXT,
+    age SMALLINT,
+    EPIC_ID TEXT,
+    social_media TEXT,
+    caste TEXT
 );
 
 -- =========================================================
--- 16. REPORTED PROBLEMS
+-- 16. CALLS (production table; quote the name in SQL)
 -- =========================================================
-CREATE TABLE public.problems (
-    pid BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
-    reported_by BIGINT REFERENCES public.call_centre_user(pid),
+CREATE TABLE public."call" (
+    cid BIGINT GENERATED ALWAYS AS IDENTITY PRIMARY KEY,
     sid BIGINT REFERENCES public.sampark_sutra(sid),
-    ac_no BIGINT NOT NULL REFERENCES public.ac(ac_no),
-    text TEXT,
-    image TEXT,
+    ac_no BIGINT REFERENCES public.ac(ac_no),
+    summary TEXT,
+    category TEXT,
     location geometry,
     flag TEXT,
-    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    feedback TEXT
 );
 ```
+
+Production uses `public."call"` for call records; the old `problems` table name
+is no longer current. The screenshot-provided schema is partial, so verify the
+live Supabase schema before changing it. The webhook migration adds provider
+idempotency fields and optional direct `village_id` linkage.
 
 ## Important existing index/constraint information
 

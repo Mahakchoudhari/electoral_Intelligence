@@ -32,6 +32,21 @@ class Query:
         return await data.villages(info.context["pool"], ac_no)
 
     @strawberry.field
+    async def call_reports(
+        self,
+        info: strawberry.Info,
+        state: str | None = None,
+        district_code: str | None = None,
+        ac_no: str | None = None,
+        village_ids: list[int] | None = None,
+        level: str = "state",
+        limit: int = 100,
+    ) -> JSON:
+        return await data.call_reports(
+            info.context["pool"], state, district_code, ac_no, village_ids, level, limit
+        )
+
+    @strawberry.field
     async def assembly_dashboard(self, info: strawberry.Info, ac_no: str) -> JSON | None:
         return await data.assembly_dashboard(info.context["pool"], ac_no)
 
@@ -45,9 +60,11 @@ class Query:
         village_id: int | None = None,
         level: str = "state",
         election_year: int | None = None,
+        village_ids: list[int] | None = None,
     ) -> JSON:
         return await data.poll_results(
-            info.context["pool"], state, district_code, ac_no, village_id, level, election_year
+            info.context["pool"], state, district_code, ac_no, village_id, level, election_year,
+            village_ids,
         )
 
     @strawberry.field
@@ -59,9 +76,10 @@ class Query:
         ac_no: str | None = None,
         village_id: int | None = None,
         level: str = "state",
+        village_ids: list[int] | None = None,
     ) -> JSON:
         return await data.election_years(
-            info.context["pool"], state, district_code, ac_no, village_id, level
+            info.context["pool"], state, district_code, ac_no, village_id, level, village_ids
         )
 
 
