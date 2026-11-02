@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from typing import Any
 
 import asyncpg
-from fastapi import FastAPI, Header, HTTPException, Request
+from fastapi import FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 
@@ -21,7 +21,30 @@ async def lifespan(application: FastAPI):
             database_url,
             min_size=pool_min_size,
             max_size=pool_max_size,
+            statement_cache_size=0,
         )
+        try:
+            async with application.state.pool.acquire() as conn:
+                await conn.execute("""
+                    ALTER TABLE public.booth_results
+                        ADD COLUMN IF NOT EXISTS votes_bsp BIGINT DEFAULT 0,
+                        ADD COLUMN IF NOT EXISTS share_bsp NUMERIC,
+                        ADD COLUMN IF NOT EXISTS votes_inc BIGINT DEFAULT 0,
+                        ADD COLUMN IF NOT EXISTS share_inc NUMERIC,
+                        ADD COLUMN IF NOT EXISTS votes_aap BIGINT DEFAULT 0,
+                        ADD COLUMN IF NOT EXISTS share_aap NUMERIC,
+                        ADD COLUMN IF NOT EXISTS votes_aimim BIGINT DEFAULT 0,
+                        ADD COLUMN IF NOT EXISTS share_aimim NUMERIC,
+                        ADD COLUMN IF NOT EXISTS share_samajwadi NUMERIC,
+                        ADD COLUMN IF NOT EXISTS votes_asp BIGINT DEFAULT 0,
+                        ADD COLUMN IF NOT EXISTS share_asp NUMERIC,
+                        ADD COLUMN IF NOT EXISTS votes_ind BIGINT DEFAULT 0,
+                        ADD COLUMN IF NOT EXISTS share_ind NUMERIC,
+                        ADD COLUMN IF NOT EXISTS votes_nota BIGINT DEFAULT 0,
+                        ADD COLUMN IF NOT EXISTS share_nota NUMERIC;
+                """)
+        except Exception:
+            pass
     else:
         application.state.pool = None
     try:
@@ -86,8 +109,9 @@ async def receive_call_report(
     report: CallReportIn,
     request: Request,
     authorization: str | None = Header(default=None),
+    dry_run: bool = Query(default=False),
 ) -> dict[str, Any]:
-    """Accept a normalized call event; its flag controls dashboard visibility."""
+    """Validate or accept a normalized event; dry runs never write to the database."""
     secret = os.getenv("CALL_WEBHOOK_SECRET", "")
     if not secret:
         raise HTTPException(status_code=503, detail="Call webhook is not configured")
@@ -128,6 +152,23 @@ async def receive_call_report(
             ac_no = village_ac_no
         if ac_no is None:
             raise HTTPException(status_code=422, detail="The supplied caller or area has no assembly assignment")
+        assembly_exists = await pool.fetchval(
+            "SELECT EXISTS (SELECT 1 FROM ac WHERE ac_no = $1)", ac_no,
+        )
+        if not assembly_exists:
+            raise HTTPException(status_code=422, detail="Unknown ac_no")
+        if dry_run:
+            return {
+                "status": "validated",
+                "dry_run": True,
+                "would_write": {
+                    "provider": report.provider.strip(),
+                    "call_id": report.call_id.strip(),
+                    "has_problem": report.has_problem,
+                    "ac_no": ac_no,
+                    "village_id": village_id,
+                },
+            }
         row = await pool.fetchrow(
             """INSERT INTO public."call" (
                    provider, provider_call_id, created_at, summary, category,
