@@ -62,8 +62,8 @@ webhook to send `Authorization: Bearer <secret>` to `POST /webhooks/calls`.
 The endpoint accepts call events using the payload contract below. The caller
 provider's developers should map their webhook fields to these names. Set
 `has_problem` from the caller-marked problem flag. Events are written to the
-production `call` table; the flag is persisted there as `true` or `false`, and
-only true-flagged calls appear in the dashboard.
+production `call` table; the flag is persisted there as `true` or `false`.
+The dashboard call feed includes both outcomes.
 Use a `village_id` when available; the API looks up its assembly. A known
 `sid` also links through `sampark_sutra` to its village and assembly. Send
 `ac_no` for assembly-only reports. If multiple area identifiers are sent, they
@@ -91,3 +91,8 @@ dashboard reads up to 100 at a time. Retries with the same provider and call ID
 update the existing call row. `occurred_at` is stored in the existing
 `created_at` column. Do not send recordings or unrelated provider
 payload fields through this endpoint.
+
+For a production-safe integration check, send the same request to
+`POST /webhooks/calls?dry_run=true`. This validates authentication, payload
+shape, and area IDs using database reads, then returns the resolved area without
+inserting or updating a call row. Omit `dry_run` for normal ingestion.

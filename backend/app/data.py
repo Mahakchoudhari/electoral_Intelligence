@@ -165,7 +165,7 @@ async def call_reports(
     bounded_limit = min(max(int(limit), 1), 250)
     rows = await pool.fetch(
         """SELECT c.cid, c.provider, c.provider_call_id, c.created_at,
-                  c.summary, c.category, c.feedback,
+                  c.summary, c.category, c.feedback, c.flag,
                   COALESCE(c.ac_no, ss.ac_no) AS ac_no,
                   COALESCE(c.village_id, ss.village_id) AS village_id,
                   a.name AS ac_name, d.name AS district_name,
@@ -181,8 +181,7 @@ async def call_reports(
                WHERE vb.village_id = COALESCE(c.village_id, ss.village_id)
                  AND vb.ac_no = COALESCE(c.ac_no, ss.ac_no)
            ) vb ON TRUE
-           WHERE lower(COALESCE(c.flag, '')) IN ('true', '1', 'yes', 'problem', 'substantive')
-             AND ($1::text IS NULL OR lower(d.state_name) = lower($1))
+           WHERE ($1::text IS NULL OR lower(d.state_name) = lower($1))
              AND ($2::text IS NULL OR d.district_code::text = $2)
              AND ($3::text IS NULL OR COALESCE(c.ac_no, ss.ac_no)::text = $3)
              AND ($4::text <> 'village' OR (
@@ -197,6 +196,7 @@ async def call_reports(
         {"report_id": row["cid"], "provider": row["provider"],
          "call_id": row["provider_call_id"], "occurred_at": row["created_at"].isoformat(),
          "issue": row["summary"], "category": row["category"],
+         "has_problem": str(row["flag"] or "").lower() in ("true", "1", "yes", "problem", "substantive"),
          "feedback": row["feedback"], "ac_no": row["ac_no"], "village_id": row["village_id"],
          "area": row["village_name"] or row["ac_name"],
          "district": row["district_name"]}
@@ -292,6 +292,13 @@ async def poll_results(
                   COALESCE(SUM(br.valid_votes), 0)::bigint AS valid_votes,
                   COALESCE(SUM(br.votes_bjp), 0)::bigint AS votes_bjp,
                   COALESCE(SUM(br.votes_rld), 0)::bigint AS votes_rld,
+                  COALESCE(SUM(br.votes_bsp), 0)::bigint AS votes_bsp,
+                  COALESCE(SUM(br.votes_inc), 0)::bigint AS votes_inc,
+                  COALESCE(SUM(br.votes_aap), 0)::bigint AS votes_aap,
+                  COALESCE(SUM(br.votes_aimim), 0)::bigint AS votes_aimim,
+                  COALESCE(SUM(br.votes_ind), 0)::bigint AS votes_ind,
+                  COALESCE(SUM(br.votes_asp), 0)::bigint AS votes_asp,
+                  COALESCE(SUM(br.votes_nota), 0)::bigint AS votes_nota,
                   COALESCE(SUM(br.votes_samajwadi), 0)::bigint AS votes_samajwadi,
                   COALESCE(SUM(br.votes_other_nota), 0)::bigint AS votes_other_nota
            FROM latest_election le
@@ -317,12 +324,22 @@ async def poll_results(
         }
 
     total_votes = row["votes_polled"] or 0
-    parties = [
-        ("BJP", row["votes_bjp"]),
-        ("RLD", row["votes_rld"]),
-        ("Samajwadi", row["votes_samajwadi"]),
-        ("Other / NOTA", row["votes_other_nota"]),
+    candidate_parties = [
+        ("BJP", row["votes_bjp"] or 0),
+        ("SP", row["votes_samajwadi"] or 0),
+        ("RLD", row["votes_rld"] or 0),
+        ("BSP", row["votes_bsp"] or 0),
+        ("INC", row["votes_inc"] or 0),
+        ("AAP", row["votes_aap"] or 0),
+        ("AIMIM", row["votes_aimim"] or 0),
+        ("ASP", row["votes_asp"] or 0),
+        ("Independent / Others", row["votes_ind"] or 0),
+        ("NOTA", row["votes_nota"] or row["votes_other_nota"] or 0),
     ]
+    parties = [p for p in candidate_parties if p[1] > 0]
+    parties.sort(key=lambda p: -p[1])
+    if not parties and total_votes == 0:
+        parties = [("BJP", 0), ("RLD", 0)]
     return {
         "election": {
             "election_id": row["election_id"],

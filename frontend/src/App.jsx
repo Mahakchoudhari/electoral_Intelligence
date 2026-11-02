@@ -430,7 +430,7 @@ function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onD
           <div className="dashboard-section-title">02 · PARTY VOTE TOTALS</div>
           <div className="party-card">
             <div className="party-card-header"><div className="party-name">Party</div><div className="party-column-labels"><span>Votes</span><span>Share</span></div></div>
-            {(data.party_votes || []).filter((party) => party.party !== "Samajwadi").map((party) => (
+            {(data.party_votes || []).filter((party) => (party.votes || 0) > 0).map((party) => (
               <div className="band-row" key={party.party}>
                 <div className="band-left"><span className="band-name">{party.party}</span></div>
                 <div className="band-values"><strong>{formatNumber(party.votes)}</strong><span>{formatPercent(party.share_percent)}</span></div>
@@ -467,12 +467,12 @@ function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onD
 
 function CallReportsPanel({ reports, loading, error, title, onClose }) {
   return (
-    <section className="call-reports-panel" aria-label="Call reported area issues">
+    <section className="call-reports-panel" aria-label="Call reports">
       <header className="call-reports-header">
         <div>
-          <div className="dashboard-eyebrow">CALL REPORTED ISSUES</div>
+          <div className="dashboard-eyebrow">CALL REPORTS</div>
           <h2>{title}</h2>
-          <p>Newest reports first</p>
+          <p>Newest caller updates first · refreshes every 10 seconds</p>
         </div>
         <button type="button" className="dashboard-close" onClick={onClose} aria-label="Close call reports">×</button>
       </header>
@@ -486,7 +486,7 @@ function CallReportsPanel({ reports, loading, error, title, onClose }) {
               {report.category && <span>{report.category}</span>}
             </div>
             {(report.area || report.district) && <div className="call-report-area">{[report.area, report.district].filter(Boolean).join(" · ")}</div>}
-            <p>{report.issue}</p>
+            <p>{report.issue || "No issue reported"}</p>
             {report.feedback && <div className="call-report-caller">Feedback: {report.feedback}</div>}
           </article>
         )) : <div className="call-reports-empty">No call reports for this area yet.</div>}
@@ -596,19 +596,25 @@ export default function App() {
   useEffect(() => {
     if (!selectedState || !callReportsOpen) return undefined;
     let cancelled = false;
-    setCallReportsLoading(true);
-    setCallReportsError("");
-    graphqlRequest(
-      "query ($state: String, $districtCode: String, $acNo: String, $villageIds: [Int!], $level: String!, $limit: Int!) { callReports(state: $state, districtCode: $districtCode, acNo: $acNo, villageIds: $villageIds, level: $level, limit: $limit) }",
-      { ...currentScope, villageIds: selectedVillage ? selectedVillageIds : [], limit: 100 }
-    ).then((result) => {
-      if (!cancelled) setCallReports(result.callReports || []);
-    }).catch((error) => {
-      if (!cancelled) setCallReportsError(error.message || "Unable to load call reports");
-    }).finally(() => {
-      if (!cancelled) setCallReportsLoading(false);
-    });
-    return () => { cancelled = true; };
+    let firstLoad = true;
+    const refreshReports = () => {
+      if (firstLoad) setCallReportsLoading(true);
+      setCallReportsError("");
+      graphqlRequest(
+        "query ($state: String, $districtCode: String, $acNo: String, $villageIds: [Int!], $level: String!, $limit: Int!) { callReports(state: $state, districtCode: $districtCode, acNo: $acNo, villageIds: $villageIds, level: $level, limit: $limit) }",
+        { ...currentScope, villageIds: selectedVillage ? selectedVillageIds : [], limit: 100 }
+      ).then((result) => {
+        if (!cancelled) setCallReports(result.callReports || []);
+      }).catch((error) => {
+        if (!cancelled) setCallReportsError(error.message || "Unable to load call reports");
+      }).finally(() => {
+        if (!cancelled) setCallReportsLoading(false);
+        firstLoad = false;
+      });
+    };
+    refreshReports();
+    const refreshTimer = window.setInterval(refreshReports, 10000);
+    return () => { cancelled = true; window.clearInterval(refreshTimer); };
   }, [selectedState, selectedAssemblyNumber, selectedVillage, selectedVillageIds, currentScope, callReportsOpen]);
 
   useEffect(() => {
@@ -961,7 +967,7 @@ export default function App() {
     const visibleLayers = LAYER_CONFIG.filter((layer) => layersVisible[layer.key]).map((layer) => layer.title).join("; ");
     rows.forEach((row) => {
       const data = row.data || {};
-      const visibleParties = (data.party_votes || []).filter((party) => party.party !== "Samajwadi");
+      const visibleParties = (data.party_votes || []).filter((party) => (party.votes || 0) > 0);
       const parties = visibleParties.length ? visibleParties : [null];
       parties.forEach((party) => lines.push([
         row.location || row.label, row.level, data.election?.name || data.election?.type || "", data.election?.year || row.electionYear || "",
@@ -1509,7 +1515,7 @@ export default function App() {
               <div className="comparison-table-wrap"><table className="comparison-table"><thead><tr><th>Metric</th>{comparisonRows.map((row) => <th key={row.label}>{row.label}</th>)}</tr></thead><tbody>
                 {[["Level", (row) => row.level], ["Election", (row) => row.data?.election?.name || row.data?.election?.type || "—"], ["Year", (row) => row.data?.election?.year || "—"], ["Booths with results", (row) => formatNumber(row.data?.booths_with_results)], ["Electors", (row) => formatNumber(row.data?.electors)], ["Votes polled", (row) => formatNumber(row.data?.votes_polled)], ["Valid votes", (row) => formatNumber(row.data?.valid_votes)]].map(([label, value]) => <tr key={label}><th>{label}</th>{comparisonRows.map((row) => <td key={row.label}>{value(row)}</td>)}</tr>)}
                 <tr className="comparison-section-row"><th colSpan={comparisonRows.length + 1}>PARTY VOTE COMPARISON</th></tr>
-                {[...new Set(comparisonRows.flatMap((row) => (row.data?.party_votes || []).filter((party) => party.party !== "Samajwadi").map((party) => party.party)))].map((partyName) => <Fragment key={partyName}><tr><th>{partyName} · Votes</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatNumber(party.votes) : "—"}</td>; })}</tr><tr><th>{partyName} · Vote share</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatPercent(party.share_percent) : "—"}</td>; })}</tr></Fragment>)}
+                {[...new Set(comparisonRows.flatMap((row) => (row.data?.party_votes || []).filter((party) => (party.votes || 0) > 0).map((party) => party.party)))].map((partyName) => <Fragment key={partyName}><tr><th>{partyName} · Votes</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatNumber(party.votes) : "—"}</td>; })}</tr><tr><th>{partyName} · Vote share</th>{comparisonRows.map((row) => { const party = row.data?.party_votes?.find((item) => item.party === partyName); return <td key={row.label}>{party ? formatPercent(party.share_percent) : "—"}</td>; })}</tr></Fragment>)}
               </tbody></table></div>
               <footer className="comparison-footer"><span>{LAYER_CONFIG.filter((layer) => layersVisible[layer.key]).length} of 6 map layers visible</span><button type="button" onClick={downloadReport}>Export current report as CSV</button></footer>
             </section>
@@ -1519,3 +1525,4 @@ export default function App() {
     </div>
   );
 }
+
