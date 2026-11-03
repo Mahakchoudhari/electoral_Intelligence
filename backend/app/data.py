@@ -321,6 +321,7 @@ async def poll_results(
             "votes_polled": 0,
             "valid_votes": 0,
             "party_votes": [],
+            "booths": [],
         }
 
     total_votes = row["votes_polled"] or 0
@@ -340,6 +341,80 @@ async def poll_results(
     parties.sort(key=lambda p: -p[1])
     if not parties and total_votes == 0:
         parties = [("BJP", 0), ("RLD", 0)]
+
+    booths_list: list[dict[str, Any]] = []
+    effective_village_ids = village_ids or ([village_id] if village_id is not None else None)
+    if level == "village" and effective_village_ids and row["election_id"]:
+        booth_rows = await pool.fetch(
+            """SELECT eb.booth_id,
+                      eb.booth_no,
+                      COALESCE(NULLIF(trim(ps.name), ''), 'Booth ' || eb.booth_no) AS booth_name,
+                      COALESCE(br.electors, 0) AS electors,
+                      COALESCE(br.votes_polled, 0) AS votes_polled,
+                      COALESCE(br.valid_votes, 0) AS valid_votes,
+                      COALESCE(br.votes_bjp, 0) AS votes_bjp,
+                      COALESCE(br.votes_samajwadi, 0) AS votes_samajwadi,
+                      COALESCE(br.votes_rld, 0) AS votes_rld,
+                      COALESCE(br.votes_bsp, 0) AS votes_bsp,
+                      COALESCE(br.votes_inc, 0) AS votes_inc,
+                      COALESCE(br.votes_aap, 0) AS votes_aap,
+                      COALESCE(br.votes_aimim, 0) AS votes_aimim,
+                      COALESCE(br.votes_asp, 0) AS votes_asp,
+                      COALESCE(br.votes_ind, 0) AS votes_ind,
+                      COALESCE(br.votes_nota, br.votes_other_nota, 0) AS votes_nota
+               FROM election_booths eb
+               LEFT JOIN polling_stations ps ON ps.ps_id = eb.ps_id
+               LEFT JOIN booth_results br ON br.booth_id = eb.booth_id
+               WHERE eb.election_id = $1
+                 AND eb.village_id = ANY($2::bigint[])
+               ORDER BY NULLIF(regexp_replace(eb.booth_no, '[^0-9]', '', 'g'), '')::int NULLS LAST,
+                        eb.booth_no,
+                        eb.booth_id""",
+            row["election_id"],
+            effective_village_ids,
+        )
+        for b_row in booth_rows:
+            b_electors = b_row["electors"] or 0
+            b_polled = b_row["votes_polled"] or 0
+            b_valid = b_row["valid_votes"] or 0
+            b_total = b_valid or b_polled or 0
+            b_candidates = [
+                ("BJP", b_row["votes_bjp"] or 0),
+                ("SP", b_row["votes_samajwadi"] or 0),
+                ("RLD", b_row["votes_rld"] or 0),
+                ("BSP", b_row["votes_bsp"] or 0),
+                ("INC", b_row["votes_inc"] or 0),
+                ("AAP", b_row["votes_aap"] or 0),
+                ("AIMIM", b_row["votes_aimim"] or 0),
+                ("ASP", b_row["votes_asp"] or 0),
+                ("Independent / Others", b_row["votes_ind"] or 0),
+                ("NOTA", b_row["votes_nota"] or 0),
+            ]
+            b_active = []
+            for p_name, p_votes in b_candidates:
+                if p_votes > 0:
+                    share = round(100 * p_votes / b_total, 2) if b_total else None
+                    b_active.append({
+                        "party": p_name,
+                        "votes": p_votes,
+                        "share_percent": share,
+                    })
+            b_active.sort(key=lambda p: -p["votes"])
+
+            turnout = round(100 * b_polled / b_electors, 1) if b_electors and b_polled else None
+
+            booths_list.append({
+                "booth_id": b_row["booth_id"],
+                "booth_no": str(b_row["booth_no"]),
+                "booth_name": b_row["booth_name"],
+                "electors": b_electors,
+                "votes_polled": b_polled,
+                "valid_votes": b_valid,
+                "turnout_percent": turnout,
+                "leading_party": b_active[0] if b_active else None,
+                "party_votes": b_active,
+            })
+
     return {
         "election": {
             "election_id": row["election_id"],
@@ -360,6 +435,7 @@ async def poll_results(
             }
             for name, votes in parties
         ],
+        "booths": booths_list,
     }
 
 
