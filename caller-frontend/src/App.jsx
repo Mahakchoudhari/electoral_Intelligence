@@ -12,14 +12,27 @@ const localDate = (offset = 0) => {
 };
 
 async function request(path, token, options = {}) {
-  const response = await fetch(`${API}${path}`, {
-    ...options,
-    headers: {
-      ...(options.body ? { "Content-Type": "application/json" } : {}),
-      ...(token ? { Authorization: `Bearer ${token}` } : {}),
-      ...options.headers,
-    },
-  });
+  let response;
+  try {
+    response = await fetch(`${API}${path}`, {
+      ...options,
+      headers: {
+        ...(options.body ? { "Content-Type": "application/json" } : {}),
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        ...options.headers,
+      },
+    });
+  } catch {
+    if (API.includes("127.0.0.1") || API.includes("localhost")) {
+      throw new Error(
+        `Unable to connect to backend server. The app is attempting to reach ${API} (localhost). Please set VITE_CALLER_API_URL in your frontend deployment settings to your Render backend URL.`
+      );
+    }
+    throw new Error(
+      `Unable to connect to backend at ${API}. The service might be starting up or sleeping (free tier). Please check status and try again.`
+    );
+  }
+
   const payload = await response.json().catch(() => ({}));
   if (!response.ok) {
     const detail = Array.isArray(payload.detail)
