@@ -363,7 +363,40 @@ function MapLayerControl({ layersVisible, toggleLayer, setAllLayers }) {
 // ASSEMBLY DASHBOARD
 // =========================================================
 
-function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onDownload, electionYears, selectedElectionYear, onElectionYearChange }) {
+function AssemblyDashboard({
+  data,
+  loading,
+  error,
+  title,
+  subtitle,
+  onClose,
+  onDownload,
+  electionYears,
+  selectedElectionYear,
+  onElectionYearChange,
+  level,
+}) {
+  const [expandedBooths, setExpandedBooths] = useState({});
+  const [boothSearch, setBoothSearch] = useState("");
+
+  const toggleBooth = (boothId) => {
+    setExpandedBooths((prev) => ({
+      ...prev,
+      [boothId]: !prev[boothId],
+    }));
+  };
+
+  const booths = useMemo(() => data?.booths || [], [data?.booths]);
+  const filteredBooths = useMemo(() => {
+    if (!boothSearch.trim()) return booths;
+    const term = boothSearch.trim().toLowerCase();
+    return booths.filter(
+      (b) =>
+        String(b.booth_no || "").toLowerCase().includes(term) ||
+        String(b.booth_name || "").toLowerCase().includes(term)
+    );
+  }, [booths, boothSearch]);
+
   if (loading) {
     return (
       <div className="assembly-dashboard">
@@ -455,6 +488,121 @@ function AssemblyDashboard({ data, loading, error, title, subtitle, onClose, onD
             ))}
           </div>
         </section>
+
+        {(level === "village" || booths.length > 0) && (
+          <section className="dashboard-section">
+            <div className="dashboard-section-title">
+              04 · BOOTHS IN THIS VILLAGE {booths.length > 0 ? `(${booths.length})` : ""}
+            </div>
+
+            {booths.length > 3 && (
+              <div className="booth-search-box">
+                <input
+                  type="text"
+                  className="booth-search-input"
+                  placeholder="Search booth name or number..."
+                  value={boothSearch}
+                  onChange={(e) => setBoothSearch(e.target.value)}
+                />
+              </div>
+            )}
+
+            {booths.length === 0 ? (
+              <div className="booth-empty-notice">
+                No booth records mapped for this village in the selected election.
+              </div>
+            ) : (
+              <div className="booths-list">
+                {filteredBooths.map((booth) => {
+                  const isExpanded = Boolean(expandedBooths[booth.booth_id]);
+                  const leading = booth.leading_party;
+                  return (
+                    <div className="booth-card" key={booth.booth_id || booth.booth_no}>
+                      <div
+                        className="booth-card-header"
+                        onClick={() => toggleBooth(booth.booth_id)}
+                        role="button"
+                        tabIndex={0}
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter" || e.key === " ") toggleBooth(booth.booth_id);
+                        }}
+                      >
+                        <div className="booth-card-top">
+                          <span className="booth-no-badge">Booth #{booth.booth_no}</span>
+                          {booth.turnout_percent !== null && booth.turnout_percent !== undefined && (
+                            <span className="booth-turnout-badge">
+                              {booth.turnout_percent}% Turnout
+                            </span>
+                          )}
+                        </div>
+                        <div className="booth-name">
+                          {booth.booth_name || `Booth ${booth.booth_no}`}
+                        </div>
+                      </div>
+
+                      <div className="booth-summary-row">
+                        <div className="booth-summary-item">
+                          <span>Electors</span>
+                          <strong>{formatNumber(booth.electors)}</strong>
+                        </div>
+                        <div className="booth-summary-item">
+                          <span>Polled</span>
+                          <strong>{formatNumber(booth.votes_polled)}</strong>
+                        </div>
+                        <div className="booth-summary-item">
+                          <span>Leading</span>
+                          <strong title={leading ? `${leading.party}: ${formatNumber(leading.votes)} votes (${formatPercent(leading.share_percent)})` : "—"}>
+                            {leading ? `${leading.party} (${formatPercent(leading.share_percent)})` : "—"}
+                          </strong>
+                        </div>
+                      </div>
+
+                      {booth.party_votes && booth.party_votes.length > 0 && (
+                        <>
+                          <button
+                            type="button"
+                            className="booth-breakdown-toggle"
+                            onClick={() => toggleBooth(booth.booth_id)}
+                            aria-expanded={isExpanded}
+                          >
+                            <span>{isExpanded ? "Hide party votes" : "Show party votes"}</span>
+                            <span>{isExpanded ? "▲" : "▼"}</span>
+                          </button>
+
+                          {isExpanded && (
+                            <div className="booth-party-breakdown">
+                              <div className="booth-party-header">
+                                <span>Party</span>
+                                <div className="booth-party-col-labels">
+                                  <span>Votes</span>
+                                  <span>Share</span>
+                                </div>
+                              </div>
+                              {booth.party_votes.map((pv) => (
+                                <div className="booth-party-row" key={pv.party}>
+                                  <span className="booth-party-name">{pv.party}</span>
+                                  <div className="booth-party-vals">
+                                    <span className="booth-party-votes">{formatNumber(pv.votes)}</span>
+                                    <span className="booth-party-share">{formatPercent(pv.share_percent)}</span>
+                                  </div>
+                                </div>
+                              ))}
+                            </div>
+                          )}
+                        </>
+                      )}
+                    </div>
+                  );
+                })}
+                {filteredBooths.length === 0 && (
+                  <div className="booth-empty-notice">
+                    No booths match &ldquo;{boothSearch}&rdquo;
+                  </div>
+                )}
+              </div>
+            )}
+          </section>
+        )}
 
         <div className="dashboard-source">
           <span className="source-dot" />
@@ -963,7 +1111,7 @@ export default function App() {
 
   function downloadReport() {
     const rows = comparisonRows.length ? comparisonRows : (assemblyDashboard ? [{ ...activeGeography, data: assemblyDashboard }] : []);
-    const lines = [["Location", "Level", "Election", "Year", "Booths with results", "Booth records", "Electors", "Votes polled", "Valid votes", "Party", "Party votes", "Party share", "Visible layers"]];
+    const lines = [["Location", "Level", "Election", "Year", "Booths with results", "Booth records", "Booth #", "Booth Name", "Electors", "Votes polled", "Valid votes", "Party", "Party votes", "Party share", "Visible layers"]];
     const visibleLayers = LAYER_CONFIG.filter((layer) => layersVisible[layer.key]).map((layer) => layer.title).join("; ");
     rows.forEach((row) => {
       const data = row.data || {};
@@ -971,9 +1119,22 @@ export default function App() {
       const parties = visibleParties.length ? visibleParties : [null];
       parties.forEach((party) => lines.push([
         row.location || row.label, row.level, data.election?.name || data.election?.type || "", data.election?.year || row.electionYear || "",
-        data.booths_with_results ?? "", data.booth_records ?? "", data.electors ?? "", data.votes_polled ?? "",
+        data.booths_with_results ?? "", data.booth_records ?? "", "ALL", "Total", data.electors ?? "", data.votes_polled ?? "",
         data.valid_votes ?? "", party?.party || "", party?.votes ?? "", party?.share_percent ?? "", visibleLayers,
       ]));
+      if (Array.isArray(data.booths) && data.booths.length > 0) {
+        data.booths.forEach((b) => {
+          const bParties = (b.party_votes || []).filter((p) => (p.votes || 0) > 0);
+          const activeBParties = bParties.length ? bParties : [null];
+          activeBParties.forEach((p) => {
+            lines.push([
+              row.location || row.label, "booth", data.election?.name || data.election?.type || "", data.election?.year || row.electionYear || "",
+              "1", "1", b.booth_no || "", b.booth_name || "", b.electors ?? "", b.votes_polled ?? "",
+              b.valid_votes ?? "", p?.party || "", p?.votes ?? "", p?.share_percent ?? "", visibleLayers,
+            ]);
+          });
+        });
+      }
     });
     const csv = lines.map((line) => line.map((value) => `"${String(value ?? "").replaceAll('"', '""')}"`).join(",")).join("\r\n");
     const url = URL.createObjectURL(new Blob([csv], { type: "text/csv;charset=utf-8" }));
@@ -1498,6 +1659,7 @@ export default function App() {
               electionYears={electionYears}
               selectedElectionYear={selectedElectionYear}
               onElectionYearChange={setSelectedElectionYear}
+              level={activeGeography.level}
             />
           )}
           {callReportsOpen && selectedState && (
