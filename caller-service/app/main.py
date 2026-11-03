@@ -34,21 +34,31 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
-origins = [
-    origin.strip()
-    for origin in os.getenv("CALLER_FRONTEND_ORIGINS", "http://localhost:5174,http://127.0.0.1:5174").split(",")
-    if origin.strip()
-]
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=origins,
-    allow_credentials=True,
-    allow_methods=["GET", "POST", "PATCH", "DELETE", "OPTIONS"],
-    allow_headers=["Authorization", "Content-Type"],
-)
+raw_origins = os.getenv("CALLER_FRONTEND_ORIGINS", "").strip()
+if not raw_origins or raw_origins == "*":
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    origins = [origin.strip() for origin in raw_origins.split(",") if origin.strip()]
+    # If user provided specific origins, also ensure localhost is allowed for testing
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 app.include_router(caller_router)
 
 
+@app.get("/", tags=["Health"])
+@app.head("/", tags=["Health"])
 @app.get("/health", tags=["Health"])
+@app.head("/health", tags=["Health"])
 async def health():
-    return {"status": "ok"}
+    return {"status": "ok", "service": "caller-service"}

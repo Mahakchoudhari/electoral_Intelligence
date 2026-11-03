@@ -17,6 +17,16 @@ psql "$DATABASE_URL" -f sql/001_caller_admin.sql
 uvicorn app.main:app --reload --port 8001
 ```
 
+## Production Deployment (e.g. Render)
+
+- **Root Directory**: `caller-service`
+- **Build Command**: `pip install -r requirements.txt`
+- **Start Command**: `uvicorn app.main:app --host 0.0.0.0 --port $PORT`
+  *(Do NOT use `--reload` in production and always specify `--host 0.0.0.0`)*
+- **Environment Variables**:
+  - `DATABASE_URL`: PostgreSQL connection string
+  - `CALLER_FRONTEND_ORIGINS`: Comma-separated frontend origins (e.g. `https://your-frontend.onrender.com`)
+
 Callers create accounts from the signup page. Accounts are stored in
 `call_centre_user`; passwords are hashed with PBKDF2-HMAC-SHA256 using a
 cryptographically random per-user salt. The salt and hash are stored in the
