@@ -27,9 +27,9 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
-class SignupIn(BaseModel):
-    username: str = Field(min_length=3, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$")
-    password: str = Field(min_length=8, max_length=200)
+# class SignupIn(BaseModel):
+#     username: str = Field(min_length=3, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$")
+#     password: str = Field(min_length=8, max_length=200)
 
 
 class SamparkSutraUpdate(BaseModel):
@@ -80,28 +80,28 @@ def create_session(pid: int, username: str, role: str) -> dict[str, str | int]:
     return {"access_token": token, "token_type": "bearer", "expires_in": _SESSION_TTL, "role": role}
 
 
-@router.post("/signup", status_code=201)
-async def signup(payload: SignupIn, request: Request) -> dict[str, str | int]:
-    pool = get_pool(request)
-    username = payload.username.strip().lower()
-    exists = await pool.fetchval(
-        "SELECT EXISTS (SELECT 1 FROM call_centre_user WHERE lower(username) = $1)",
-        username,
-    )
-    if exists:
-        raise HTTPException(status_code=409, detail="That username is already taken")
-    salt = secrets.token_bytes(16)
-    salt_text = salt.hex()
-    password_hash = hash_password(payload.password, salt)
-    try:
-        row = await pool.fetchrow(
-            """INSERT INTO call_centre_user (username, hashed_password, salt)
-               VALUES ($1, $2, $3) RETURNING pid, username, role""",
-            username, password_hash, salt_text,
-        )
-    except asyncpg.UniqueViolationError as exc:
-        raise HTTPException(status_code=409, detail="That username is already taken") from exc
-    return create_session(row["pid"], row["username"], row["role"])
+# @router.post("/signup", status_code=201)
+# async def signup(payload: SignupIn, request: Request) -> dict[str, str | int]:
+#     pool = get_pool(request)
+#     username = payload.username.strip().lower()
+#     exists = await pool.fetchval(
+#         "SELECT EXISTS (SELECT 1 FROM call_centre_user WHERE lower(username) = $1)",
+#         username,
+#     )
+#     if exists:
+#         raise HTTPException(status_code=409, detail="That username is already taken")
+#     salt = secrets.token_bytes(16)
+#     salt_text = salt.hex()
+#     password_hash = hash_password(payload.password, salt)
+#     try:
+#         row = await pool.fetchrow(
+#             """INSERT INTO call_centre_user (username, hashed_password, salt)
+#                VALUES ($1, $2, $3) RETURNING pid, username, role""",
+#             username, password_hash, salt_text,
+#         )
+#     except asyncpg.UniqueViolationError as exc:
+#         raise HTTPException(status_code=409, detail="That username is already taken") from exc
+#     return create_session(row["pid"], row["username"], row["role"])
 
 
 @router.post("/login")
@@ -358,7 +358,7 @@ async def list_sampark_sutras(
     ac_no: int | None = None,
     district_code: int | None = None,
     search: str | None = None,
-    limit: int = 500,
+    limit: int = 5000,
     request: Request = None,
     _: dict[str, Any] = Depends(require_caller),
 ):
@@ -401,7 +401,7 @@ async def list_sampark_sutras(
         LEFT JOIN districts d ON d.district_code = a.district_code
         {where_clause}
         ORDER BY ss.name NULLS LAST, ss.sid
-        LIMIT {max(1, min(limit, 1000))}
+        LIMIT {max(1, min(limit, 10000))}
     """
     rows = await pool.fetch(query, *params)
     return [

@@ -128,8 +128,6 @@ export default function CallerDashboard() {
   const [role, setRole] = useState(() => sessionStorage.getItem("caller-role") || "");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
-  const [confirmPassword, setConfirmPassword] = useState("");
-  const [isSignup, setIsSignup] = useState(false);
   const [isAdminLogin, setIsAdminLogin] = useState(false);
   const [districts, setDistricts] = useState([]);
   const [assemblies, setAssemblies] = useState([]);
@@ -295,19 +293,16 @@ export default function CallerDashboard() {
 
   async function handleAuth(event) {
     event.preventDefault(); setBusy(true); setLoginError("");
-    if (isSignup && password !== confirmPassword) {
-      setLoginError("Passwords do not match."); setBusy(false); return;
-    }
     try {
-      const result = await request(`/api/caller/${isSignup ? "signup" : "login"}`, "", {
+      const result = await request("/api/caller/login", "", {
         method: "POST", body: JSON.stringify({ username, password }),
       });
-      if (!isSignup && isAdminLogin && result.role !== "admin") {
+      if (isAdminLogin && result.role !== "admin") {
         throw new Error("This account does not have administrator access.");
       }
       sessionStorage.setItem("caller-token", result.access_token);
       sessionStorage.setItem("caller-role", result.role);
-      setToken(result.access_token); setRole(result.role); setPassword(""); setConfirmPassword("");
+      setToken(result.access_token); setRole(result.role); setPassword("");
     } catch (error) { setLoginError(error.message); }
     finally { setBusy(false); }
   }
@@ -536,17 +531,20 @@ export default function CallerDashboard() {
       <section className="caller-login-card">
         <div className="caller-brand-mark">EI</div>
         <div className="caller-kicker">ELECTORAL INTELLIGENCE</div>
-        <h1>{isSignup ? "Create your account" : isAdminLogin ? "Admin sign in" : "Caller workspace"}</h1>
-        <p className="caller-login-copy">{isSignup ? "Sign up to start recording Sampark Sutra conversations." : isAdminLogin ? "Sign in to review caller activity and daily work." : "Sign in to record Sampark Sutra conversations."}</p>
+        <h1>{isAdminLogin ? "Admin sign in" : "Caller workspace"}</h1>
+        <p className="caller-login-copy">{isAdminLogin ? "Sign in to review caller activity and daily work." : "Sign in to record Sampark Sutra conversations."}</p>
         <form onSubmit={handleAuth} className="caller-login-form">
           <label>Username<input autoComplete="username" minLength={3} maxLength={100} pattern="[A-Za-z0-9_.-]+" value={username} onChange={(e) => setUsername(e.target.value)} required /></label>
-          <label>Password<input type="password" autoComplete={isSignup ? "new-password" : "current-password"} minLength={isSignup ? 8 : 1} value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
-          {isSignup && <label>Confirm password<input type="password" autoComplete="new-password" minLength="8" value={confirmPassword} onChange={(e) => setConfirmPassword(e.target.value)} required /></label>}
+          <label>Password<input type="password" autoComplete="current-password" minLength={1} value={password} onChange={(e) => setPassword(e.target.value)} required /></label>
           {loginError && <div className="caller-error" role="alert">{loginError}</div>}
-          <button className="caller-primary" disabled={busy}>{busy ? (isSignup ? "Creating account…" : "Signing in…") : (isSignup ? "Create account" : isAdminLogin ? "Admin sign in" : "Sign in")}<span>→</span></button>
+          <button className="caller-primary" disabled={busy}>{busy ? "Signing in…" : (isAdminLogin ? "Admin sign in" : "Sign in")}<span>→</span></button>
         </form>
-        <div className="caller-auth-switch">{isSignup ? "Already have an account?" : isAdminLogin ? "Caller account?" : "New to the caller workspace?"} <button type="button" onClick={() => { setIsSignup((value) => !value); setIsAdminLogin(false); setLoginError(""); }}>{isSignup ? "Sign in" : isAdminLogin ? "Caller sign in" : "Create account"}</button></div>
-        {!isSignup && <div className="caller-auth-switch">{isAdminLogin ? "" : "Administrator?"} {!isAdminLogin && <button type="button" onClick={() => { setIsAdminLogin(true); setLoginError(""); }}>Admin sign in</button>}</div>}
+        <div className="caller-auth-switch">
+          {isAdminLogin ? "Looking for caller sign in?" : "Administrator?"}{" "}
+          <button type="button" onClick={() => { setIsAdminLogin((prev) => !prev); setLoginError(""); }}>
+            {isAdminLogin ? "Caller sign in" : "Admin sign in"}
+          </button>
+        </div>
         <a className="caller-back-link" href="/">← Back to election dashboard</a>
       </section>
       <aside className="caller-login-aside"><span>FIELD INTELLIGENCE</span><h2>Every conversation<br />moves us closer.</h2><p>Capture local feedback as it happens and keep your team informed.</p><div className="aside-orbit orbit-one"/><div className="aside-orbit orbit-two"/></aside>
