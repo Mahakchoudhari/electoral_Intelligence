@@ -1,0 +1,287 @@
+/* =========================================================
+   Electoral Intelligence Admin Login Screen Styles
+   ========================================================= */
+
+.caller-login-page {
+  min-height: 100dvh;
+  height: 100dvh;
+  display: grid;
+  grid-template-columns: minmax(380px, 1fr) minmax(420px, 1fr);
+  background: #ffffff;
+  color: #18334b;
+  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Inter", Arial, sans-serif;
+  overflow: hidden;
+}
+
+.caller-login-card {
+  width: min(380px, calc(100% - 48px));
+  margin: auto;
+  padding: 40px 0;
+  display: flex;
+  flex-direction: column;
+}
+
+.caller-brand-mark {
+  width: 44px;
+  height: 44px;
+  margin-bottom: 24px;
+  border-radius: 12px;
+  display: grid;
+  place-items: center;
+  background: linear-gradient(135deg, #173b5d 0%, #1f4c68 100%);
+  color: #ffffff;
+  font-size: 15px;
+  font-weight: 800;
+  letter-spacing: 0.05em;
+  box-shadow: 0 4px 14px rgba(23, 59, 93, 0.25);
+}
+
+.caller-kicker {
+  font-size: 9.5px;
+  letter-spacing: 0.16em;
+  font-weight: 700;
+  color: #8293a2;
+  text-transform: uppercase;
+  margin-bottom: 8px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.caller-kicker .admin-badge-dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #f59e0b;
+}
+
+.caller-login-card h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 700;
+  letter-spacing: -0.04em;
+  color: #0f172a;
+}
+
+.caller-login-copy {
+  font-size: 12.5px;
+  color: #64748b;
+  margin: 8px 0 24px;
+  line-height: 1.5;
+}
+
+.caller-login-form {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.caller-login-form label {
+  font-size: 11px;
+  font-weight: 650;
+  color: #334155;
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+}
+
+.caller-login-form input {
+  background: #ffffff;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  color: #0f172a;
+  height: 42px;
+  padding: 0 13px;
+  font-size: 13px;
+  outline: none;
+  transition: all 0.18s ease;
+}
+
+.caller-login-form input:focus {
+  border-color: #0284c7;
+  box-shadow: 0 0 0 3px rgba(2, 132, 199, 0.15);
+}
+
+.caller-error {
+  padding: 10px 13px;
+  border-radius: 7px;
+  color: #b91c1c;
+  background: #fef2f2;
+  border: 1px solid #fecaca;
+  font-size: 11.5px;
+  line-height: 1.4;
+  display: flex;
+  align-items: center;
+  gap: 7px;
+}
+
+.caller-primary {
+  border: 0;
+  border-radius: 8px;
+  height: 44px;
+  padding: 0 16px;
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  background: #173b5d;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  transition: all 0.18s ease;
+  margin-top: 5px;
+}
+
+.caller-primary:hover:not(:disabled) {
+  background: #0f2840;
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(15, 40, 64, 0.2);
+}
+
+.caller-primary:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+
+.caller-primary span {
+  font-size: 16px;
+  line-height: 0;
+}
+
+.caller-admin-restricted-note {
+  margin-top: 22px;
+  padding: 10px 13px;
+  border-radius: 8px;
+  background: #f8fafc;
+  border: 1px solid #e2e8f0;
+  font-size: 11px;
+  color: #64748b;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  line-height: 1.4;
+}
+
+.caller-admin-restricted-note svg {
+  flex-shrink: 0;
+  color: #f59e0b;
+}
+
+/* Right Side Aside */
+.caller-login-aside {
+  position: relative;
+  overflow: hidden;
+  background: #173d5a;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  padding: 12%;
+  color: #ffffff;
+}
+
+.caller-login-aside > span {
+  font-size: 9.5px;
+  letter-spacing: 0.18em;
+  color: #93c5fd;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.caller-login-aside h2 {
+  font-size: 36px;
+  line-height: 1.18;
+  letter-spacing: -0.04em;
+  margin: 16px 0 14px;
+  font-weight: 600;
+  z-index: 1;
+  color: #ffffff;
+}
+
+.caller-login-aside p {
+  font-size: 13px;
+  color: #cbd5e1;
+  max-width: 340px;
+  line-height: 1.65;
+  z-index: 1;
+}
+
+.aside-orbit {
+  position: absolute;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 50%;
+  width: 520px;
+  height: 520px;
+  right: -190px;
+  bottom: -260px;
+  pointer-events: none;
+}
+
+.orbit-two {
+  width: 360px;
+  height: 360px;
+  right: -110px;
+  bottom: -180px;
+  border-color: rgba(255, 255, 255, 0.16);
+}
+
+@media (max-width: 800px) {
+  .caller-login-page {
+    grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100dvh;
+    background: linear-gradient(135deg, #f8fafc 0%, #ffffff 60%);
+  }
+  .caller-login-aside {
+    display: none;
+  }
+  .caller-login-card {
+    margin: 8vh auto;
+  }
+}
+
+/* Admin Navbar Badges & Sign-Out Button */
+.admin-status-cluster {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.admin-badge-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  background: rgba(245, 158, 11, 0.12);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fbbf24;
+  border-radius: 6px;
+  padding: 4px 9px;
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+}
+
+.admin-badge-pill svg {
+  color: #f59e0b;
+}
+
+.admin-signout-btn {
+  background: rgba(239, 68, 68, 0.12);
+  border: 1px solid rgba(239, 68, 68, 0.3);
+  color: #f87171;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  transition: all 0.18s ease;
+}
+
+.admin-signout-btn:hover {
+  background: rgba(239, 68, 68, 0.25);
+  border-color: #ef4444;
+  color: #ffffff;
+  transform: translateY(-1px);
+}

@@ -13,7 +13,8 @@ import "leaflet/dist/leaflet.css";
 import "./index.css";
 import "./ElectoralStyles.css";
 import LandingDashboard from "./LandingDashboard.jsx";
-import { IconChartBar } from "./Icons.jsx";
+import LoginScreen from "./LoginScreen.jsx";
+import { IconChartBar, IconShieldCheck, IconLogOut } from "./Icons.jsx";
 
 // =========================================================
 // API & CONSTANTS
@@ -1050,6 +1051,30 @@ export default function App() {
     }
   });
 
+  // Admin authentication state: only administrators can view the dashboard
+  const [authAdmin, setAuthAdmin] = useState(() => {
+    try {
+      const token = sessionStorage.getItem("gis-admin-token");
+      const role = sessionStorage.getItem("gis-admin-role");
+      const username = sessionStorage.getItem("gis-admin-user");
+      if (token && role === "admin") {
+        return { token, role, username: username || "admin" };
+      }
+      return null;
+    } catch {
+      return null;
+    }
+  });
+
+  const handleAdminLogout = () => {
+    try {
+      sessionStorage.removeItem("gis-admin-token");
+      sessionStorage.removeItem("gis-admin-role");
+      sessionStorage.removeItem("gis-admin-user");
+    } catch {}
+    setAuthAdmin(null);
+  };
+
   // Listen to browser forward/back buttons between / and /gis
   useEffect(() => {
     const handlePopState = () => {
@@ -1749,6 +1774,10 @@ export default function App() {
     if (selectedState) resetMap();
   };
 
+  if (!authAdmin) {
+    return <LoginScreen onLoginSuccess={(adminData) => setAuthAdmin(adminData)} />;
+  }
+
   if (activeView === "landing") {
     return (
       <LandingDashboard
@@ -1756,6 +1785,8 @@ export default function App() {
         initialAC={selectedAssemblyNumber || "49"}
         initialVillage={selectedVillage || ""}
         initialElectionYear={selectedElectionYear ? String(selectedElectionYear) : "2022"}
+        authAdmin={authAdmin}
+        onLogout={handleAdminLogout}
       />
     );
   }
@@ -1872,6 +1903,24 @@ export default function App() {
           <button className="reset-button" onClick={resetMap}>
             <span>↻</span> Reset
           </button>
+
+          {authAdmin && (
+            <div className="admin-status-cluster" style={{ marginLeft: "4px" }}>
+              <span className="admin-badge-pill" title={`Signed in as Administrator: ${authAdmin.username}`}>
+                <IconShieldCheck size={12} />
+                <span>Admin: {authAdmin.username}</span>
+              </span>
+              <button
+                type="button"
+                className="admin-signout-btn"
+                onClick={handleAdminLogout}
+                title="Sign out of Admin session"
+              >
+                <IconLogOut size={12} />
+                <span>Sign out</span>
+              </button>
+            </div>
+          )}
         </div>
       </header>
 

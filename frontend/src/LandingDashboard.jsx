@@ -21,6 +21,7 @@ import {
   IconX,
   IconCircleDot,
   IconSearch,
+  IconLogOut,
 } from "./Icons.jsx";
 
 
@@ -174,6 +175,8 @@ export default function LandingDashboard({
   initialAC = "49",
   initialVillage = "",
   initialElectionYear = "2022",
+  authAdmin = null,
+  onLogout = null,
 }) {
   const [constituencies, setConstituencies] = useState([]);
   const [callingData, setCallingData] = useState(null);
@@ -665,6 +668,26 @@ export default function LandingDashboard({
             <span>GIS Map Dashboard</span>
             <span className="gis-button-arrow">→</span>
           </button>
+
+          {authAdmin && (
+            <div className="admin-status-cluster" style={{ marginLeft: "4px" }}>
+              <span className="admin-badge-pill" title={`Signed in as Administrator: ${authAdmin.username}`}>
+                <IconShieldCheck size={12} />
+                <span>Admin: {authAdmin.username}</span>
+              </span>
+              {onLogout && (
+                <button
+                  type="button"
+                  className="admin-signout-btn"
+                  onClick={onLogout}
+                  title="Sign out of Admin session"
+                >
+                  <IconLogOut size={12} />
+                  <span>Sign out</span>
+                </button>
+              )}
+            </div>
+          )}
         </div>
       </header>
 
