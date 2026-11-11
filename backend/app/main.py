@@ -1,5 +1,8 @@
 import os
 import hmac
+import hashlib
+import secrets
+import time
 from contextlib import asynccontextmanager
 from datetime import datetime, timezone
 from typing import Any
@@ -79,6 +82,79 @@ app.add_middleware(
 )
 
 app.include_router(graphql_router, prefix="/graphql")
+
+
+class LoginIn(BaseModel):
+    username: str = Field(min_length=1, max_length=100)
+    password: str = Field(min_length=1, max_length=200)
+
+
+_PBKDF2_ITERATIONS = 310_000
+_sessions: dict[str, dict[str, Any]] = {}
+_SESSION_TTL = 60 * 60 * 24  # 24 hours
+
+
+def hash_password(password: str, salt: bytes) -> str:
+    return hashlib.pbkdf2_hmac(
+        "sha256", password.encode("utf-8"), salt, _PBKDF2_ITERATIONS,
+    ).hex()
+
+
+@app.post("/api/auth/login", tags=["Auth"])
+@app.post("/api/caller/login", tags=["Auth"])
+async def auth_login(payload: LoginIn, request: Request) -> dict[str, Any]:
+    pool = getattr(request.app.state, "pool", None)
+    if pool is None:
+        raise HTTPException(status_code=503, detail="Database is unavailable")
+
+    row = await pool.fetchrow(
+        """SELECT pid, username, hashed_password, salt, role FROM call_centre_user
+           WHERE lower(username) = lower($1)""", payload.username.strip(),
+    )
+    if row is None:
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+
+    try:
+        salt = bytes.fromhex(row["salt"])
+        expected_hash = row["hashed_password"]
+        provided_hash = hash_password(payload.password, salt)
+    except (TypeError, ValueError):
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+
+    if not hmac.compare_digest(provided_hash, expected_hash or ""):
+        raise HTTPException(status_code=401, detail="Incorrect username or password")
+
+    token = secrets.token_urlsafe(32)
+    session_data = {
+        "pid": row["pid"],
+        "username": row["username"],
+        "role": row["role"],
+        "expires_at": time.time() + _SESSION_TTL,
+    }
+    _sessions[token] = session_data
+    return {
+        "access_token": token,
+        "token_type": "bearer",
+        "role": row["role"],
+        "username": row["username"],
+        "expires_in": _SESSION_TTL,
+    }
+
+
+@app.get("/api/auth/me", tags=["Auth"])
+async def auth_me(authorization: str | None = Header(default=None)) -> dict[str, Any]:
+    if not authorization or not authorization.startswith("Bearer "):
+        raise HTTPException(status_code=401, detail="Sign in to continue")
+    token = authorization[7:]
+    sess = _sessions.get(token)
+    if not sess or sess["expires_at"] < time.time():
+        _sessions.pop(token, None)
+        raise HTTPException(status_code=401, detail="Session expired")
+    return {
+        "username": sess["username"],
+        "role": sess["role"],
+        "pid": sess["pid"],
+    }
 
 
 class CallReportIn(BaseModel):
