@@ -64,20 +64,19 @@ app = FastAPI(
     lifespan=lifespan,
 )
 
+raw_origins = os.getenv("FRONTEND_ORIGINS", "").strip()
 frontend_origins = [
     origin.strip()
-    for origin in os.getenv(
-        "FRONTEND_ORIGINS",
-        "http://127.0.0.1:5173,http://localhost:5173",
-    ).split(",")
-    if origin.strip()
-]
+    for origin in raw_origins.split(",")
+    if origin.strip() and origin.strip() != "*"
+] if raw_origins else ["http://127.0.0.1:5173", "http://localhost:5173"]
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=frontend_origins,
+    allow_origin_regex=r"^https?://.*",
     allow_credentials=True,
-    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_methods=["*"],
     allow_headers=["*"],
 )
 

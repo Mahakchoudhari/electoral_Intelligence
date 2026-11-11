@@ -13,12 +13,24 @@ export default function LoginScreen({ onLoginSuccess }) {
     setError("");
     setBusy(true);
 
-    try {
-      const endpoints = [
-        "/api/auth/login",
-        "http://127.0.0.1:8000/api/auth/login",
-        "http://127.0.0.1:8001/api/caller/login",
-      ];
+      const customApi = (import.meta.env.VITE_API_URL || import.meta.env.VITE_CALLER_API_URL || "").replace(/\/+$/, "");
+      const customGql = (import.meta.env.VITE_GRAPHQL_API || "").replace(/\/graphql\/?$/, "").replace(/\/+$/, "");
+      const base = customApi || customGql;
+
+      const endpoints = [];
+      if (base) {
+        endpoints.push(`${base}/api/auth/login`);
+        endpoints.push(`${base}/api/caller/login`);
+      }
+      endpoints.push("/api/auth/login");
+      endpoints.push("/api/caller/login");
+
+      const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+      if (isLocal) {
+        endpoints.push("http://127.0.0.1:8000/api/auth/login");
+        endpoints.push("http://127.0.0.1:8001/api/caller/login");
+      }
+
       let result = null;
       let lastErr = null;
 
@@ -35,7 +47,7 @@ export default function LoginScreen({ onLoginSuccess }) {
           } else {
             const data = await res.json().catch(() => ({}));
             lastErr = data.detail || `Sign in failed (${res.status})`;
-            if (res.status === 401) break;
+            if (res.status === 401 || res.status === 403) break;
           }
         } catch (fetchErr) {
           lastErr = fetchErr.message;
@@ -43,6 +55,11 @@ export default function LoginScreen({ onLoginSuccess }) {
       }
 
       if (!result) {
+        if (lastErr && lastErr.toLowerCase().includes("failed to fetch")) {
+          throw new Error(
+            "Failed to fetch backend API. In production, configure VITE_API_URL in your deployment settings to point to your backend API URL, and verify backend CORS allows this domain."
+          );
+        }
         throw new Error(lastErr || "Incorrect username or password");
       }
 
