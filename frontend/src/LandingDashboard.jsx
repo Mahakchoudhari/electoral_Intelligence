@@ -25,7 +25,14 @@ import {
 } from "./Icons.jsx";
 
 
-const GRAPHQL_API = import.meta.env.VITE_GRAPHQL_API || "http://127.0.0.1:8000/graphql";
+const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
+const GRAPHQL_API =
+  import.meta.env.VITE_GRAPHQL_API ||
+  (API_URL
+    ? `${API_URL}/graphql`
+    : typeof window !== "undefined" && window.location.hostname !== "localhost" && window.location.hostname !== "127.0.0.1"
+    ? "/graphql"
+    : "http://127.0.0.1:8000/graphql");
 
 async function queryGraphQL(query, variables = {}) {
   const response = await fetch(GRAPHQL_API, {
