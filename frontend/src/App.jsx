@@ -11,6 +11,9 @@ import L from "leaflet";
 
 import "leaflet/dist/leaflet.css";
 import "./index.css";
+import "./ElectoralStyles.css";
+import LandingDashboard from "./LandingDashboard.jsx";
+import { IconChartBar } from "./Icons.jsx";
 
 // =========================================================
 // API & CONSTANTS
@@ -111,6 +114,196 @@ function formatNumber(value) {
 
 function formatPercent(value) {
   return value === null || value === undefined || value === "" ? "—" : `${value}%`;
+}
+
+const DEFAULT_THRESHOLDS = {
+  tier1Max: 10,
+  tier1Color: "#ef4444", // Red (< 10%)
+  tier2Max: 25,
+  tier2Color: "#f97316", // Amber (10-25%)
+  tier3Max: 50,
+  tier3Color: "#eab308", // Yellow (25-50%)
+  tier4Color: "#22c55e", // Green (> 50%)
+};
+
+const DEFAULT_PARTY_COLORS = {
+  RLD: "#16a34a",
+  BJP: "#f97316",
+  SP: "#ef4444",
+  BSP: "#2563eb",
+  INC: "#0284c7",
+  AAP: "#0891b2",
+  AIMIM: "#0d9488",
+  ASP: "#9333ea",
+  IND: "#64748b",
+};
+
+function getVotePercentageTier(pct, thresholds = DEFAULT_THRESHOLDS) {
+  if (pct === null || pct === undefined || Number.isNaN(Number(pct))) {
+    return { tier: "none", label: "No data", color: "#334155" };
+  }
+  const val = Number(pct);
+  if (val < thresholds.tier1Max) {
+    return { tier: "red", label: `< ${thresholds.tier1Max}%`, color: thresholds.tier1Color };
+  }
+  if (val < thresholds.tier2Max) {
+    return { tier: "amber", label: `${thresholds.tier1Max}-${thresholds.tier2Max}%`, color: thresholds.tier2Color };
+  }
+  if (val < thresholds.tier3Max) {
+    return { tier: "yellow", label: `${thresholds.tier2Max}-${thresholds.tier3Max}%`, color: thresholds.tier3Color };
+  }
+  return { tier: "green", label: `> ${thresholds.tier3Max}%`, color: thresholds.tier4Color };
+}
+
+function SettingsModal({ thresholds, onSave, onClose }) {
+  const [local, setLocal] = useState({ ...thresholds });
+
+  return (
+    <div className="modal-backdrop" onClick={onClose}>
+      <div className="tactical-modal" onClick={(e) => e.stopPropagation()}>
+        <div className="tactical-modal-header">
+          <h3>
+            <span>⚙</span> Threshold & Demarcation Settings
+          </h3>
+          <button type="button" className="dashboard-close" onClick={onClose} aria-label="Close settings">
+            ×
+          </button>
+        </div>
+
+        <div className="tactical-modal-body">
+          <p style={{ margin: 0, fontSize: "11.5px", color: "#94a3b8", lineHeight: 1.5 }}>
+            Configure the vote share % ranges and color codes used to demarcate assembly constituencies, villages, and polling booths.
+          </p>
+
+          <div>
+            <div className="setting-section-title">VOTE PERCENTAGE THRESHOLDS & COLORS</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: "8px" }}>
+              {/* Tier 1: Red */}
+              <div className="tier-config-row">
+                <div className="tier-config-label">
+                  <span className="tier-dot" style={{ backgroundColor: local.tier1Color, color: local.tier1Color }} />
+                  <span>Tier 1 (Red)</span>
+                </div>
+                <div className="tier-range-inputs">
+                  <span>Less than</span>
+                  <input
+                    type="number"
+                    min="1"
+                    max={Number(local.tier2Max) - 1}
+                    value={local.tier1Max}
+                    onChange={(e) => setLocal({ ...local, tier1Max: Number(e.target.value) })}
+                    className="tier-input"
+                  />
+                  <span>%</span>
+                </div>
+                <input
+                  type="color"
+                  value={local.tier1Color}
+                  onChange={(e) => setLocal({ ...local, tier1Color: e.target.value })}
+                  className="color-picker-input"
+                  title="Pick Tier 1 Color"
+                />
+              </div>
+
+              {/* Tier 2: Amber */}
+              <div className="tier-config-row">
+                <div className="tier-config-label">
+                  <span className="tier-dot" style={{ backgroundColor: local.tier2Color, color: local.tier2Color }} />
+                  <span>Tier 2 (Amber)</span>
+                </div>
+                <div className="tier-range-inputs">
+                  <span>{local.tier1Max}% to</span>
+                  <input
+                    type="number"
+                    min={Number(local.tier1Max) + 1}
+                    max={Number(local.tier3Max) - 1}
+                    value={local.tier2Max}
+                    onChange={(e) => setLocal({ ...local, tier2Max: Number(e.target.value) })}
+                    className="tier-input"
+                  />
+                  <span>%</span>
+                </div>
+                <input
+                  type="color"
+                  value={local.tier2Color}
+                  onChange={(e) => setLocal({ ...local, tier2Color: e.target.value })}
+                  className="color-picker-input"
+                  title="Pick Tier 2 Color"
+                />
+              </div>
+
+              {/* Tier 3: Yellow */}
+              <div className="tier-config-row">
+                <div className="tier-config-label">
+                  <span className="tier-dot" style={{ backgroundColor: local.tier3Color, color: local.tier3Color }} />
+                  <span>Tier 3 (Yellow)</span>
+                </div>
+                <div className="tier-range-inputs">
+                  <span>{local.tier2Max}% to</span>
+                  <input
+                    type="number"
+                    min={Number(local.tier2Max) + 1}
+                    max={99}
+                    value={local.tier3Max}
+                    onChange={(e) => setLocal({ ...local, tier3Max: Number(e.target.value) })}
+                    className="tier-input"
+                  />
+                  <span>%</span>
+                </div>
+                <input
+                  type="color"
+                  value={local.tier3Color}
+                  onChange={(e) => setLocal({ ...local, tier3Color: e.target.value })}
+                  className="color-picker-input"
+                  title="Pick Tier 3 Color"
+                />
+              </div>
+
+              {/* Tier 4: Green */}
+              <div className="tier-config-row">
+                <div className="tier-config-label">
+                  <span className="tier-dot" style={{ backgroundColor: local.tier4Color, color: local.tier4Color }} />
+                  <span>Tier 4 (Green)</span>
+                </div>
+                <div className="tier-range-inputs">
+                  <span>Greater than {local.tier3Max}%</span>
+                </div>
+                <input
+                  type="color"
+                  value={local.tier4Color}
+                  onChange={(e) => setLocal({ ...local, tier4Color: e.target.value })}
+                  className="color-picker-input"
+                  title="Pick Tier 4 Color"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="tactical-modal-footer">
+          <button
+            type="button"
+            className="tactical-btn"
+            onClick={() => setLocal({ ...DEFAULT_THRESHOLDS })}
+          >
+            ↺ Reset Defaults
+          </button>
+          <div style={{ display: "flex", gap: "10px" }}>
+            <button type="button" className="tactical-btn" onClick={onClose}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="tactical-btn active"
+              onClick={() => onSave(local)}
+            >
+              ✓ Save Settings
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
 }
 
 const ASSEMBLY_COLORS = [
@@ -361,8 +554,6 @@ function MapLayerControl({ layersVisible, toggleLayer, setAllLayers }) {
 
 // =========================================================
 // ASSEMBLY DASHBOARD
-// =========================================================
-
 function AssemblyDashboard({
   data,
   loading,
@@ -375,6 +566,11 @@ function AssemblyDashboard({
   selectedElectionYear,
   onElectionYearChange,
   level,
+  targetParty,
+  thresholds,
+  tierFilter,
+  setTierFilter,
+  tierCounts,
 }) {
   const [expandedBooths, setExpandedBooths] = useState({});
   const [boothSearch, setBoothSearch] = useState("");
@@ -396,6 +592,21 @@ function AssemblyDashboard({
         String(b.booth_name || "").toLowerCase().includes(term)
     );
   }, [booths, boothSearch]);
+
+  // Compute booth-level tier counts if booths are available
+  const boothTierCounts = useMemo(() => {
+    const res = { red: 0, amber: 0, yellow: 0, green: 0, total: 0 };
+    if (!booths.length || !targetParty) return res;
+    booths.forEach((b) => {
+      const pv = (b.party_votes || []).find((p) => p.party === targetParty);
+      if (pv && pv.share_percent !== null && pv.share_percent !== undefined) {
+        const tier = getVotePercentageTier(pv.share_percent, thresholds).tier;
+        if (res[tier] !== undefined) res[tier] += 1;
+        res.total += 1;
+      }
+    });
+    return res;
+  }, [booths, targetParty, thresholds]);
 
   if (loading) {
     return (
@@ -459,8 +670,90 @@ function AssemblyDashboard({
           </div>
         </section>
 
+        {targetParty && (
+          <section className="dashboard-section">
+            <div className="dashboard-section-title">02 · DEMARCATION BREAKDOWN ({targetParty})</div>
+            <div className="tier-metrics-container">
+              <div className="tier-metrics-grid">
+                {[
+                  {
+                    tier: "red",
+                    name: "Red",
+                    range: `< ${thresholds?.tier1Max ?? 10}%`,
+                    color: thresholds?.tier1Color ?? "#ef4444",
+                  },
+                  {
+                    tier: "amber",
+                    name: "Amber",
+                    range: `${thresholds?.tier1Max ?? 10}-${thresholds?.tier2Max ?? 25}%`,
+                    color: thresholds?.tier2Color ?? "#f59e0b",
+                  },
+                  {
+                    tier: "yellow",
+                    name: "Yellow",
+                    range: `${thresholds?.tier2Max ?? 25}-${thresholds?.tier3Max ?? 50}%`,
+                    color: thresholds?.tier3Color ?? "#eab308",
+                  },
+                  {
+                    tier: "green",
+                    name: "Green",
+                    range: `> ${thresholds?.tier3Max ?? 50}%`,
+                    color: thresholds?.tier4Color ?? "#22c55e",
+                  },
+                ].map((item) => {
+                  const isFiltered = tierFilter === item.tier;
+                  const boothCount = boothTierCounts?.[item.tier] ?? 0;
+                  const villageCount = tierCounts?.villages?.[item.tier] ?? 0;
+                  const acCount = tierCounts?.assemblies?.[item.tier] ?? 0;
+                  return (
+                    <div
+                      key={item.tier}
+                      className={`tier-metric-cell ${isFiltered ? "active-metric" : ""}`}
+                      style={{
+                        borderColor: isFiltered ? item.color : undefined,
+                        boxShadow: isFiltered ? `0 0 12px ${item.color}55` : undefined,
+                      }}
+                      onClick={() => setTierFilter?.((prev) => (prev === item.tier ? "all" : item.tier))}
+                      title={`Click to filter by ${item.name} (${item.range})`}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="tier-metric-header">
+                        <span className="tier-dot" style={{ backgroundColor: item.color, color: item.color }} />
+                        <span className="tier-metric-name" style={{ color: item.color }}>{item.name}</span>
+                      </div>
+                      <span className="tier-metric-range">{item.range}</span>
+
+                      <div className="tier-metric-counts">
+                        {booths.length > 0 && (
+                          <div className="tier-count-item">
+                            <span>Booths:</span>
+                            <strong>{boothCount}</strong>
+                          </div>
+                        )}
+                        {(tierCounts?.villages?.total > 0 || level === "assembly" || level === "village") && (
+                          <div className="tier-count-item">
+                            <span>Villages:</span>
+                            <strong>{villageCount}</strong>
+                          </div>
+                        )}
+                        {(tierCounts?.assemblies?.total > 0 || level === "district" || level === "state") && (
+                          <div className="tier-count-item">
+                            <span>ACs:</span>
+                            <strong>{acCount}</strong>
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        )}
+
         <section className="dashboard-section">
-          <div className="dashboard-section-title">02 · PARTY VOTE TOTALS</div>
+          <div className="dashboard-section-title">03 · PARTY VOTE TOTALS</div>
           <div className="party-card">
             <div className="party-card-header"><div className="party-name">Party</div><div className="party-column-labels"><span>Votes</span><span>Share</span></div></div>
             {(data.party_votes || []).filter((party) => (party.votes || 0) > 0).map((party) => (
@@ -473,7 +766,7 @@ function AssemblyDashboard({
         </section>
 
         <section className="dashboard-section">
-          <div className="dashboard-section-title">03 · POLL TOTALS</div>
+          <div className="dashboard-section-title">04 · POLL TOTALS</div>
           <div className="checks-grid">
             {[
               ["Booth records", formatNumber(data.booth_records)],
@@ -492,7 +785,7 @@ function AssemblyDashboard({
         {(level === "village" || booths.length > 0) && (
           <section className="dashboard-section">
             <div className="dashboard-section-title">
-              04 · BOOTHS IN THIS VILLAGE {booths.length > 0 ? `(${booths.length})` : ""}
+              05 · BOOTHS IN THIS VILLAGE {booths.length > 0 ? `(${booths.length})` : ""}
             </div>
 
             {booths.length > 3 && (
@@ -665,8 +958,22 @@ export default function App() {
   const [selectedDistrict, setSelectedDistrict] = useState("");
   const [selectedDistrictCode, setSelectedDistrictCode] = useState("");
   const [selectedAssembly, setSelectedAssembly] = useState("");
-  const [selectedAssemblyNumber, setSelectedAssemblyNumber] = useState("");
-  const [selectedVillage, setSelectedVillage] = useState("");
+  const [selectedAssemblyNumber, setSelectedAssemblyNumber] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("ac") || "";
+    } catch {
+      return "";
+    }
+  });
+  const [selectedVillage, setSelectedVillage] = useState(() => {
+    try {
+      const p = new URLSearchParams(window.location.search);
+      return p.get("village") || "";
+    } catch {
+      return "";
+    }
+  });
   const [selectedVillageFeature, setSelectedVillageFeature] = useState(null);
 
   const [selectedStateFeature, setSelectedStateFeature] = useState(null);
@@ -715,6 +1022,90 @@ export default function App() {
   const [selectedElectionYear, setSelectedElectionYear] = useState("");
   const [electionYearsLoading, setElectionYearsLoading] = useState(false);
   const [electionScopeKey, setElectionScopeKey] = useState("");
+
+  // Tactical Electoral Targeting & Settings States
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const [thresholds, setThresholds] = useState(() => {
+    try {
+      const saved = localStorage.getItem("ei_thresholds");
+      return saved ? JSON.parse(saved) : DEFAULT_THRESHOLDS;
+    } catch {
+      return DEFAULT_THRESHOLDS;
+    }
+  });
+
+  const [targetParty, setTargetParty] = useState("RLD");
+  const [secondaryParty, setSecondaryParty] = useState("BJP");
+  const [tierFilter, setTierFilter] = useState("all"); // 'all' | 'amber' | 'red' | 'yellow' | 'green'
+
+  const [activeView, setActiveView] = useState(() => {
+    try {
+      const pathname = window.location.pathname.toLowerCase();
+      if (pathname === "/gis" || pathname.startsWith("/gis/")) return "gis";
+      const urlParams = new URLSearchParams(window.location.search);
+      if (urlParams.get("view") === "gis") return "gis";
+      return "landing";
+    } catch {
+      return "landing";
+    }
+  });
+
+  // Listen to browser forward/back buttons between / and /gis
+  useEffect(() => {
+    const handlePopState = () => {
+      const pathname = window.location.pathname.toLowerCase();
+      const urlParams = new URLSearchParams(window.location.search);
+      if (pathname === "/gis" || pathname.startsWith("/gis/") || urlParams.get("view") === "gis") {
+        setActiveView("gis");
+      } else {
+        setActiveView("landing");
+      }
+    };
+    window.addEventListener("popstate", handlePopState);
+    return () => window.removeEventListener("popstate", handlePopState);
+  }, []);
+
+  const handleOpenGIS = (acNo, villageId, year) => {
+    setActiveView("gis");
+    try {
+      const searchParams = new URLSearchParams(window.location.search);
+      if (acNo) searchParams.set("ac", acNo);
+      if (villageId) searchParams.set("village", villageId);
+      if (year) searchParams.set("year", year);
+      const searchStr = searchParams.toString() ? `?${searchParams.toString()}` : "";
+      window.history.pushState({}, "", `/gis${searchStr}`);
+    } catch {}
+    if (year) {
+      setSelectedElectionYear(Number(year));
+    }
+    if (acNo) {
+      if (!selectedState) setSelectedState("UTTAR PRADESH");
+      setSelectedAssemblyNumber(String(acNo));
+    }
+    if (villageId) {
+      setSelectedVillage(String(villageId));
+      setMapLevel("village");
+    } else if (acNo) {
+      setMapLevel("assembly");
+    }
+  };
+
+  const handleOpenLanding = () => {
+    setActiveView("landing");
+    try {
+      window.history.pushState({}, "", "/");
+    } catch {}
+  };
+
+  const handleSaveThresholds = (updated) => {
+    setThresholds(updated);
+    try {
+      localStorage.setItem("ei_thresholds", JSON.stringify(updated));
+    } catch (e) {
+      console.warn("Could not save thresholds to localStorage", e);
+    }
+    setSettingsOpen(false);
+  };
 
   const currentScope = useMemo(() => ({
     state: selectedState || null,
@@ -801,7 +1192,10 @@ export default function App() {
 
     async function loadStates() {
       try {
-        const data = await graphqlRequest("query { states }");
+        const data = await graphqlRequest(
+          "query ($electionYear: Int) { states(electionYear: $electionYear) }",
+          { electionYear: selectedElectionYear ? Number(selectedElectionYear) : null }
+        );
         if (!cancelled) setStates(data.states);
       } catch (error) {
         console.error("State loading error:", error);
@@ -813,7 +1207,7 @@ export default function App() {
 
     loadStates();
     return () => { cancelled = true; };
-  }, []);
+  }, [selectedElectionYear]);
 
   // Load districts for selected state
   useEffect(() => {
@@ -825,7 +1219,13 @@ export default function App() {
     }
     setDistrictsLoading(true);
     setDistrictsError("");
-    graphqlRequest("query ($state: String!) { districts(state: $state) }", { state: selectedState })
+    graphqlRequest(
+      "query ($state: String!, $electionYear: Int) { districts(state: $state, electionYear: $electionYear) }",
+      {
+        state: selectedState,
+        electionYear: selectedElectionYear ? Number(selectedElectionYear) : null,
+      }
+    )
       .then((data) => {
         if (!cancelled) setDistricts(data.districts);
       })
@@ -838,7 +1238,7 @@ export default function App() {
         if (!cancelled) setDistrictsLoading(false);
       });
     return () => { cancelled = true; };
-  }, [selectedState]);
+  }, [selectedState, selectedElectionYear]);
 
   // Load assemblies for selected district
   useEffect(() => {
@@ -850,8 +1250,11 @@ export default function App() {
     }
     setAssembliesLoading(true);
     graphqlRequest(
-      "query ($districtCode: String!) { assemblies(districtCode: $districtCode) }",
-      { districtCode: String(selectedDistrictCode) }
+      "query ($districtCode: String!, $electionYear: Int) { assemblies(districtCode: $districtCode, electionYear: $electionYear) }",
+      {
+        districtCode: String(selectedDistrictCode),
+        electionYear: selectedElectionYear ? Number(selectedElectionYear) : null,
+      }
     )
       .then((data) => {
         if (!cancelled) setAssemblies(data.assemblies);
@@ -866,7 +1269,7 @@ export default function App() {
         if (!cancelled) setAssembliesLoading(false);
       });
     return () => { cancelled = true; };
-  }, [selectedDistrictCode]);
+  }, [selectedDistrictCode, selectedElectionYear]);
 
   // Load poll results for the deepest selected level
   useEffect(() => {
@@ -932,8 +1335,11 @@ export default function App() {
       setVillageError("");
       try {
         const result = await graphqlRequest(
-          "query ($acNo: String!) { villages(acNo: $acNo) }",
-          { acNo: String(selectedAssemblyNumber) }
+          "query ($acNo: String!, $electionYear: Int) { villages(acNo: $acNo, electionYear: $electionYear) }",
+          {
+            acNo: String(selectedAssemblyNumber),
+            electionYear: selectedElectionYear ? Number(selectedElectionYear) : null,
+          }
         );
         const data = result.villages;
         if (!cancelled) setVillages(data);
@@ -950,7 +1356,24 @@ export default function App() {
 
     loadVillages();
     return () => { cancelled = true; };
-  }, [selectedAssemblyNumber]);
+  }, [selectedAssemblyNumber, selectedElectionYear]);
+
+  // Keep selectedVillageFeature in sync when villages data updates (e.g. election year change or route param)
+  useEffect(() => {
+    if (selectedVillage && villages?.features) {
+      const target = String(selectedVillage).trim().toLowerCase();
+      const updatedFeature = villages.features.find((f) => {
+        const vName = String(getVillageName(f) || "").trim().toLowerCase();
+        const vId = String(f.properties?.village_id || f.properties?.objectid || "").trim().toLowerCase();
+        return vName === target || vId === target;
+      });
+      if (updatedFeature) {
+        setSelectedVillageFeature(updatedFeature);
+        setSelectedVillage(getVillageName(updatedFeature));
+        setMapLevel("village");
+      }
+    }
+  }, [villages, selectedVillage]);
 
   const stateOptions = useMemo(() => {
     if (!states?.features) return [];
@@ -959,24 +1382,148 @@ export default function App() {
 
   const districtOptions = useMemo(() => {
     if (!districts?.features) return [];
-    return [...new Set(districts.features.map(getDistrictName).filter(Boolean))].sort();
-  }, [districts]);
+    let feats = districts.features;
+    if (tierFilter !== "all") {
+      feats = feats.filter((f) => {
+        const shares = f.properties?.party_shares || {};
+        const share = shares[targetParty];
+        if (share === undefined || share === null) return false;
+        return getVotePercentageTier(share, thresholds).tier === tierFilter;
+      });
+    }
+    return [...new Set(feats.map(getDistrictName).filter(Boolean))].sort();
+  }, [districts, tierFilter, targetParty, thresholds]);
 
   const assemblyOptions = useMemo(() => {
     if (!assemblies?.features || !selectedDistrictCode) return [];
-    return [...new Set(assemblies.features.map(getAssemblyName).filter(Boolean))].sort();
-  }, [assemblies, selectedDistrictCode]);
+    let feats = assemblies.features;
+    if (tierFilter !== "all") {
+      feats = feats.filter((f) => {
+        const shares = f.properties?.party_shares || {};
+        const share = shares[targetParty];
+        if (share === undefined || share === null) return false;
+        return getVotePercentageTier(share, thresholds).tier === tierFilter;
+      });
+    }
+    return [...new Set(feats.map(getAssemblyName).filter(Boolean))].sort();
+  }, [assemblies, selectedDistrictCode, tierFilter, targetParty, thresholds]);
 
   const villageOptions = useMemo(() => {
     if (!villages?.features) return [];
-    const names = villages.features
+    let feats = villages.features;
+    if (tierFilter !== "all") {
+      feats = feats.filter((f) => {
+        const shares = f.properties?.party_shares || {};
+        const share = shares[targetParty];
+        if (share === undefined || share === null || !(f.properties?.votes_polled > 0)) return false;
+        return getVotePercentageTier(share, thresholds).tier === tierFilter;
+      });
+    }
+    const names = feats
       .map(getVillageName)
       .map((name) => String(name || "").trim())
       .filter(Boolean);
     return [...new Set(names)].sort((a, b) =>
       a.localeCompare(b, "en", { sensitivity: "base" })
     );
-  }, [villages]);
+  }, [villages, tierFilter, targetParty, thresholds]);
+
+  const currentLevel = selectedVillage
+    ? "Village"
+    : selectedAssembly
+    ? "Assembly"
+    : selectedDistrict
+    ? "District"
+    : selectedState
+    ? "State"
+    : "India";
+
+  const currentLevelFilterMatchCount = useMemo(() => {
+    if (tierFilter === "all") return 1;
+    if (currentLevel === "Village") {
+      if (!villages?.features) return 0;
+      return villages.features.filter((f) => {
+        const shares = f.properties?.party_shares || {};
+        const share = shares[targetParty];
+        return share !== undefined && share !== null && f.properties?.votes_polled > 0 && getVotePercentageTier(share, thresholds).tier === tierFilter;
+      }).length;
+    }
+    if (currentLevel === "Assembly") {
+      if (!assemblies?.features) return 0;
+      return assemblies.features.filter((f) => {
+        const districtCode = getAssemblyDistrictCode(f);
+        const inDistrict = !selectedDistrictCode || normalizeCode(districtCode) === normalizeCode(selectedDistrictCode);
+        if (!inDistrict) return false;
+        const shares = f.properties?.party_shares || {};
+        const share = shares[targetParty];
+        return share !== undefined && share !== null && getVotePercentageTier(share, thresholds).tier === tierFilter;
+      }).length;
+    }
+    if (currentLevel === "District") {
+      if (!districts?.features) return 0;
+      return districts.features.filter((f) => {
+        const shares = f.properties?.party_shares || {};
+        const share = shares[targetParty];
+        return share !== undefined && share !== null && getVotePercentageTier(share, thresholds).tier === tierFilter;
+      }).length;
+    }
+    if (currentLevel === "State" || currentLevel === "India") {
+      if (!states?.features) return 0;
+      return states.features.filter((f) => {
+        const shares = f.properties?.party_shares || {};
+        const share = shares[targetParty];
+        return share !== undefined && share !== null && getVotePercentageTier(share, thresholds).tier === tierFilter;
+      }).length;
+    }
+    return 1;
+  }, [currentLevel, tierFilter, villages, assemblies, districts, states, targetParty, thresholds, selectedDistrictCode]);
+
+  const scopeTierCounts = useMemo(() => {
+    const counts = {
+      villages: { red: 0, amber: 0, yellow: 0, green: 0, total: 0 },
+      assemblies: { red: 0, amber: 0, yellow: 0, green: 0, total: 0 },
+      districts: { red: 0, amber: 0, yellow: 0, green: 0, total: 0 },
+    };
+
+    if (villages?.features) {
+      villages.features.forEach((f) => {
+        const share = f.properties?.party_shares?.[targetParty];
+        if (share !== undefined && share !== null && f.properties?.votes_polled > 0) {
+          const t = getVotePercentageTier(share, thresholds).tier;
+          if (counts.villages[t] !== undefined) counts.villages[t] += 1;
+          counts.villages.total += 1;
+        }
+      });
+    }
+
+    if (assemblies?.features) {
+      assemblies.features.forEach((f) => {
+        const districtCode = getAssemblyDistrictCode(f);
+        const inDistrict = !selectedDistrictCode || normalizeCode(districtCode) === normalizeCode(selectedDistrictCode);
+        if (inDistrict) {
+          const share = f.properties?.party_shares?.[targetParty];
+          if (share !== undefined && share !== null) {
+            const t = getVotePercentageTier(share, thresholds).tier;
+            if (counts.assemblies[t] !== undefined) counts.assemblies[t] += 1;
+            counts.assemblies.total += 1;
+          }
+        }
+      });
+    }
+
+    if (districts?.features) {
+      districts.features.forEach((f) => {
+        const share = f.properties?.party_shares?.[targetParty];
+        if (share !== undefined && share !== null) {
+          const t = getVotePercentageTier(share, thresholds).tier;
+          if (counts.districts[t] !== undefined) counts.districts[t] += 1;
+          counts.districts.total += 1;
+        }
+      });
+    }
+
+    return counts;
+  }, [villages, assemblies, districts, targetParty, thresholds, selectedDistrictCode]);
 
   const assembliesHaveBoundaries = Boolean(assemblies?.features?.some((feature) => feature.geometry));
   const villagesHaveGeometry = Boolean(villages?.features?.some((feature) => feature.geometry));
@@ -1160,6 +1707,7 @@ export default function App() {
     setAssemblyDashboard(null);
     setDashboardError("");
     setDashboardOpen(false);
+    setTierFilter("all");
     setMapLevel("india");
   }
 
@@ -1199,6 +1747,17 @@ export default function App() {
     }
 
     if (selectedState) resetMap();
+  };
+
+  if (activeView === "landing") {
+    return (
+      <LandingDashboard
+        onOpenGIS={handleOpenGIS}
+        initialAC={selectedAssemblyNumber || "49"}
+        initialVillage={selectedVillage || ""}
+        initialElectionYear={selectedElectionYear ? String(selectedElectionYear) : "2022"}
+      />
+    );
   }
 
   if (loading) {
@@ -1211,16 +1770,6 @@ export default function App() {
       </div>
     );
   }
-
-  const currentLevel = selectedVillage
-    ? "Village"
-    : selectedAssembly
-    ? "Assembly"
-    : selectedDistrict
-    ? "District"
-    : selectedState
-    ? "State"
-    : "India";
 
   const currentLocation =
     selectedVillage || selectedAssembly || selectedDistrict || selectedState || "India";
@@ -1241,10 +1790,85 @@ export default function App() {
         </div>
 
         <div className="header-right">
+          <div className="target-party-bar">
+            <span className="target-party-tag">Target:</span>
+            <span className="target-party-fixed" title="Fixed primary analysis party">RLD</span>
+
+            <span className="target-party-tag" style={{ marginLeft: "4px" }}>vs</span>
+            <select
+              value={secondaryParty}
+              onChange={(e) => setSecondaryParty(e.target.value)}
+              className="target-party-select"
+              title="Select Comparison Party"
+            >
+              <option value="BJP">BJP</option>
+              <option value="SP">SP</option>
+              <option value="BSP">BSP</option>
+              <option value="INC">INC</option>
+              <option value="AAP">AAP</option>
+              <option value="AIMIM">AIMIM</option>
+              <option value="ASP">ASP</option>
+              <option value="none">— None —</option>
+            </select>
+          </div>
+
+          <div className="tier-filter-bar">
+            <span className="tier-filter-tag">Filter:</span>
+            <div className="tier-filter-buttons">
+              <button
+                type="button"
+                className={`tier-filter-chip ${tierFilter === "all" ? "active" : ""}`}
+                onClick={() => setTierFilter("all")}
+                title="Show all tiers"
+              >
+                All
+              </button>
+              <button
+                type="button"
+                className={`tier-filter-chip amber-toggle ${tierFilter === "amber" ? "active" : ""}`}
+                onClick={() => setTierFilter((prev) => (prev === "amber" ? "all" : "amber"))}
+                title={`Filter Amber (${thresholds.tier1Max}-${thresholds.tier2Max}%) across ${currentLevel}s`}
+              >
+                <span className="tier-dot" style={{ backgroundColor: thresholds.tier2Color }} />
+                <span>Amber Only</span>
+                {tierFilter === "amber" && <span className="tier-active-badge">ON</span>}
+              </button>
+              <select
+                value={tierFilter}
+                onChange={(e) => setTierFilter(e.target.value)}
+                className="tier-filter-dropdown"
+                title="Filter by Demarcation Tier"
+              >
+                <option value="all">All Tiers</option>
+                <option value="amber">⚡ Amber ({thresholds.tier1Max}-{thresholds.tier2Max}%)</option>
+                <option value="red">Red (&lt; {thresholds.tier1Max}%)</option>
+                <option value="yellow">Yellow ({thresholds.tier2Max}-{thresholds.tier3Max}%)</option>
+                <option value="green">Green (&gt; {thresholds.tier3Max}%)</option>
+              </select>
+            </div>
+          </div>
+
+          <button
+            type="button"
+            className="tactical-btn"
+            onClick={() => setSettingsOpen(true)}
+            title="Configure Thresholds & Colors"
+          >
+            <span>⚙</span> Thresholds
+          </button>
+
           <div className="system-status">
             <span className="status-dot" />
             GIS SYSTEM
           </div>
+          <button
+            type="button"
+            className="analytics-view-toggle-btn"
+            onClick={handleOpenLanding}
+            title="Return to Analytics Landing Page (Full Graphs, No Map)"
+          >
+            <IconChartBar size={14} /> Landing Page
+          </button>
           <button className="reset-button" onClick={resetMap}>
             <span>↻</span> Reset
           </button>
@@ -1417,29 +2041,54 @@ export default function App() {
 
             {layersVisible.states && states && (
               <GeoJSON
-                key="india-states"
+                key={`india-states-${selectedElectionYear || "latest"}-${targetParty}-${thresholds.tier1Max}-${thresholds.tier2Max}-${thresholds.tier3Max}-${tierFilter}`}
                 data={states}
+                filter={(feature) => {
+                  if (tierFilter && tierFilter !== "all") {
+                    const shares = feature.properties?.party_shares || {};
+                    const targetShare = shares[targetParty];
+                    if (targetShare === undefined || targetShare === null) return false;
+                    const tier = getVotePercentageTier(targetShare, thresholds);
+                    if (tier.tier !== tierFilter) return false;
+                  }
+                  return true;
+                }}
                 style={(feature) => {
                   const selected =
                     normalizeCode(getStateCode(feature)) === normalizeCode(selectedStateCode);
+                  const shares = feature.properties?.party_shares || {};
+                  const targetShare = shares[targetParty];
+                  const hasData = targetShare !== undefined && targetShare !== null;
+                  const tier = getVotePercentageTier(targetShare, thresholds);
                   return {
-                    color: selected ? "#0f172a" : "#475569",
-                    weight: selected ? 3 : 1.4,
-                    fillColor: selected ? "#3b82f6" : "#94a3b8",
-                    fillOpacity: selected ? 0.2 : 0.04,
+                    color: selected ? "#38bdf8" : (hasData ? tier.color : "#334155"),
+                    weight: selected ? 3 : 1.2,
+                    fillColor: hasData ? tier.color : (selected ? "#1e293b" : "#0f172a"),
+                    fillOpacity: selected ? 0.55 : (hasData ? 0.35 : 0.12),
                   };
                 }}
                 onEachFeature={(feature, layer) => {
-                  layer.bindTooltip(getStateName(feature) || "State", { sticky: true });
+                  const name = getStateName(feature) || "State";
+                  const shares = feature.properties?.party_shares || {};
+                  const targetShare = shares[targetParty];
+                  const hasData = targetShare !== undefined && targetShare !== null;
+                  const tier = getVotePercentageTier(targetShare, thresholds);
+
+                  let tooltipHtml = `<strong>${name}</strong>`;
+                  if (hasData) {
+                    tooltipHtml += `<br/><span style="display:inline-block;width:8px;height:8px;background:${tier.color};border-radius:2px;margin-right:4px;"></span>${targetParty}: <b>${targetShare}%</b> (${tier.tier.toUpperCase()})`;
+                  }
+                  layer.bindTooltip(tooltipHtml, { sticky: true });
                   layer.on({
                     click: () => handleStateClick(feature),
-                    mouseover: (event) => event.target.setStyle({ weight: 3, fillOpacity: 0.2 }),
+                    mouseover: (event) => event.target.setStyle({ weight: 2.8, fillOpacity: 0.5 }),
                     mouseout: (event) => {
                       const selected =
                         normalizeCode(getStateCode(feature)) === normalizeCode(selectedStateCode);
                       event.target.setStyle({
-                        weight: selected ? 3 : 1.4,
-                        fillOpacity: selected ? 0.2 : 0.04,
+                        color: selected ? "#38bdf8" : (hasData ? tier.color : "#334155"),
+                        weight: selected ? 3 : 1.2,
+                        fillOpacity: selected ? 0.55 : (hasData ? 0.35 : 0.12),
                       });
                     },
                   });
@@ -1449,29 +2098,62 @@ export default function App() {
 
             {layersVisible.districts && districts && (
               <GeoJSON
-                key={`districts-${selectedStateCode}`}
+                key={`districts-${selectedStateCode}-${selectedElectionYear || "latest"}-${targetParty}-${thresholds.tier1Max}-${thresholds.tier2Max}-${thresholds.tier3Max}-${tierFilter}`}
                 data={districts}
+                filter={(feature) => {
+                  if (tierFilter && tierFilter !== "all") {
+                    const shares = feature.properties?.party_shares || {};
+                    const targetShare = shares[targetParty];
+                    if (targetShare === undefined || targetShare === null) return false;
+                    const tier = getVotePercentageTier(targetShare, thresholds);
+                    if (tier.tier !== tierFilter) return false;
+                  }
+                  return true;
+                }}
                 style={(feature) => {
                   const selected =
                     normalizeCode(getDistrictCode(feature)) === normalizeCode(selectedDistrictCode);
+                  const shares = feature.properties?.party_shares || {};
+                  const targetShare = shares[targetParty];
+                  const hasData = targetShare !== undefined && targetShare !== null;
+                  const tier = getVotePercentageTier(targetShare, thresholds);
                   return {
-                    color: selected ? "#111827" : "#2563eb",
-                    weight: selected ? 3 : 1.4,
-                    fillColor: "#60a5fa",
-                    fillOpacity: selected ? 0.28 : 0.05,
+                    color: selected ? "#38bdf8" : (hasData ? tier.color : "#475569"),
+                    weight: selected ? 3.5 : 2,
+                    fillColor: hasData ? tier.color : (selected ? "#1e293b" : "#0d1522"),
+                    fillOpacity: selected ? 0.55 : (hasData ? 0.38 : 0.15),
                   };
                 }}
                 onEachFeature={(feature, layer) => {
-                  layer.bindTooltip(getDistrictName(feature) || "District", { sticky: true });
+                  const name = getDistrictName(feature) || "District";
+                  const shares = feature.properties?.party_shares || {};
+                  const targetShare = shares[targetParty];
+                  const hasData = targetShare !== undefined && targetShare !== null;
+                  const tier = getVotePercentageTier(targetShare, thresholds);
+
+                  let tooltipHtml = `<strong>${name}</strong>`;
+                  if (hasData) {
+                    tooltipHtml += `<br/><span style="display:inline-block;width:8px;height:8px;background:${tier.color};border-radius:2px;margin-right:4px;"></span>${targetParty}: <b>${targetShare}%</b> (${tier.tier.toUpperCase()})`;
+                  }
+                  if (secondaryParty && secondaryParty !== "none") {
+                    const p2Share = shares[secondaryParty];
+                    if (p2Share !== undefined && p2Share !== null) {
+                      const p2Tier = getVotePercentageTier(p2Share, thresholds);
+                      tooltipHtml += `<br/><span style="display:inline-block;width:8px;height:8px;background:${p2Tier.color};border-radius:2px;margin-right:4px;"></span>${secondaryParty}: <b>${p2Share}%</b> (${p2Tier.tier.toUpperCase()})`;
+                    }
+                  }
+
+                  layer.bindTooltip(tooltipHtml, { sticky: true });
                   layer.on({
                     click: () => handleDistrictClick(feature),
-                    mouseover: (event) => event.target.setStyle({ weight: 3, fillOpacity: 0.22 }),
+                    mouseover: (event) => event.target.setStyle({ weight: 3.5, fillOpacity: 0.65 }),
                     mouseout: (event) => {
                       const selected =
                         normalizeCode(getDistrictCode(feature)) === normalizeCode(selectedDistrictCode);
                       event.target.setStyle({
-                        weight: selected ? 3 : 1.4,
-                        fillOpacity: selected ? 0.28 : 0.05,
+                        color: selected ? "#38bdf8" : (hasData ? tier.color : "#475569"),
+                        weight: selected ? 3.5 : 2,
+                        fillOpacity: selected ? 0.55 : (hasData ? 0.38 : 0.15),
                       });
                     },
                   });
@@ -1481,7 +2163,7 @@ export default function App() {
 
             {layersVisible.assemblies && selectedDistrictCode && assemblies && (
               <GeoJSON
-                key={`assemblies-${selectedDistrictCode}`}
+                key={`assemblies-${selectedDistrictCode}-${selectedElectionYear || "latest"}-${targetParty}-${secondaryParty}-${thresholds.tier1Max}-${thresholds.tier2Max}-${thresholds.tier3Max}-${tierFilter}`}
                 data={assemblies}
                 filter={(feature) => {
                   const districtCode = getAssemblyDistrictCode(feature);
@@ -1489,38 +2171,73 @@ export default function App() {
                     const code = getAssemblyDistrictCode(item);
                     return code !== undefined && code !== null && code !== "";
                   });
-                  return (
+                  const inDistrict =
                     Boolean(feature.geometry) &&
-                    (!hasDistrictCodes || normalizeCode(districtCode) === normalizeCode(selectedDistrictCode))
-                  );
+                    (!hasDistrictCodes || normalizeCode(districtCode) === normalizeCode(selectedDistrictCode));
+                  if (!inDistrict) return false;
+
+                  if (tierFilter && tierFilter !== "all") {
+                    const shares = feature.properties?.party_shares || {};
+                    const targetShare = shares[targetParty] ?? 0;
+                    const tier = getVotePercentageTier(targetShare, thresholds);
+                    if (tier.tier !== tierFilter) return false;
+                  }
+                  return true;
                 }}
                 style={(feature) => {
                   const acNo = getAssemblyNumber(feature);
                   const selected =
                     normalizeCode(acNo) === normalizeCode(selectedAssemblyNumber);
-                  const color = getAssemblyColor(acNo);
+
+                  const shares = feature.properties?.party_shares || {};
+                  const targetShare = shares[targetParty] ?? 0;
+                  const tier = getVotePercentageTier(targetShare, thresholds);
+
                   return {
-                    color: selected ? "#111827" : color,
-                    weight: selected ? 3 : 1.4,
-                    fillColor: color,
-                    fillOpacity: selected ? 0.22 : 0.2,
+                    color: selected ? "#38bdf8" : tier.color,
+                    weight: selected ? 3.5 : 2,
+                    fillColor: tier.color,
+                    fillOpacity: selected ? 0.55 : 0.32,
+                    dashArray: selected ? "" : "none",
                   };
                 }}
                 onEachFeature={(feature, layer) => {
                   const name = getAssemblyName(feature);
                   const acNo = getAssemblyNumber(feature);
-                  layer.bindTooltip(`${name || "Assembly"}${acNo ? ` • AC ${acNo}` : ""}`, { sticky: true });
+                  const shares = feature.properties?.party_shares || {};
+                  const p1Share = shares[targetParty] ?? 0;
+                  const p1Tier = getVotePercentageTier(p1Share, thresholds);
+
+                  let tooltipHtml = `<strong>${name || "Assembly"}</strong>${acNo ? ` • AC ${acNo}` : ""}<br/>`;
+                  tooltipHtml += `<span style="display:inline-block;width:8px;height:8px;background:${p1Tier.color};border-radius:2px;margin-right:4px;"></span>${targetParty}: <b>${p1Share}%</b> (${p1Tier.tier.toUpperCase()})`;
+
+                  if (secondaryParty && secondaryParty !== "none") {
+                    const p2Share = shares[secondaryParty] ?? 0;
+                    const p2Tier = getVotePercentageTier(p2Share, thresholds);
+                    tooltipHtml += `<br/><span style="display:inline-block;width:8px;height:8px;background:${p2Tier.color};border-radius:2px;margin-right:4px;"></span>${secondaryParty}: <b>${p2Share}%</b> (${p2Tier.tier.toUpperCase()})`;
+                    tooltipHtml += `<br/><small style="color:#94a3b8;margin-top:2px;display:inline-block;">Pattern: <b style="color:#f8fafc">${p1Tier.tier}-${p2Tier.tier}</b></small>`;
+                  }
+
+                  // Permanent clean label like reference image
+                  layer.bindTooltip(name || `AC ${acNo}`, {
+                    permanent: true,
+                    direction: "center",
+                    className: "tactical-map-label",
+                  });
+
                   layer.on({
                     click: () => handleAssemblyClick(feature),
-                    mouseover: (event) => event.target.setStyle({ weight: 3, fillOpacity: 0.45 }),
+                    mouseover: (event) => {
+                      event.target.setStyle({ weight: 3.5, fillOpacity: 0.65 });
+                    },
                     mouseout: (event) => {
                       const selected =
                         normalizeCode(acNo) === normalizeCode(selectedAssemblyNumber);
-                      const color = getAssemblyColor(acNo);
+                      const tier = getVotePercentageTier(shares[targetParty] ?? 0, thresholds);
                       event.target.setStyle({
-                        color: selected ? "#111827" : color,
-                        weight: selected ? 3 : 1.4,
-                        fillOpacity: selected ? 0.22 : 0.2,
+                        color: selected ? "#38bdf8" : tier.color,
+                        weight: selected ? 3.5 : 2,
+                        fillOpacity: selected ? 0.55 : 0.32,
                       });
                     },
                   });
@@ -1529,16 +2246,84 @@ export default function App() {
             )}
 
             {layersVisible.villageBoundary &&
-              selectedVillageFeature &&
-              ["Polygon", "MultiPolygon"].includes(selectedVillageFeature.geometry?.type) && (
+              selectedAssemblyNumber &&
+              villages?.features?.length > 0 && (
                 <GeoJSON
-                  key={`selected-village-${selectedVillage}-${selectedVillageFeature.properties?.objectid || "feature"}`}
-                  data={selectedVillageFeature}
-                  style={{
-                    color: "#2563eb",
-                    weight: 3,
-                    fillColor: "#60a5fa",
-                    fillOpacity: 0.18,
+                  key={`villages-boundary-${selectedAssemblyNumber}-${selectedElectionYear || "latest"}-${targetParty}-${thresholds.tier1Max}-${thresholds.tier2Max}-${thresholds.tier3Max}-${tierFilter}`}
+                  data={villages}
+                  filter={(feature) => {
+                    if (!feature.geometry) return false;
+                    if (tierFilter && tierFilter !== "all") {
+                      const shares = feature.properties?.party_shares || {};
+                      const targetShare = shares[targetParty];
+                      if (targetShare === undefined || targetShare === null || !(feature.properties?.votes_polled > 0)) return false;
+                      const tier = getVotePercentageTier(targetShare, thresholds);
+                      if (tier.tier !== tierFilter) return false;
+                    }
+                    return true;
+                  }}
+                  style={(feature) => {
+                    const vName = getVillageName(feature);
+                    const isSelected =
+                      selectedVillage &&
+                      String(selectedVillage).trim().toLowerCase() === String(vName).trim().toLowerCase();
+                    const shares = feature.properties?.party_shares || {};
+                    const targetShare = shares[targetParty];
+                    const hasData =
+                      targetShare !== undefined && targetShare !== null && feature.properties?.votes_polled > 0;
+                    const tier = getVotePercentageTier(targetShare, thresholds);
+                    return {
+                      color: isSelected ? "#38bdf8" : (hasData ? tier.color : "#475569"),
+                      weight: isSelected ? 3.5 : (hasData ? 2 : 1),
+                      fillColor: hasData ? tier.color : (isSelected ? "#1e293b" : "#1e293b"),
+                      fillOpacity: isSelected ? 0.65 : (hasData ? 0.38 : 0.12),
+                    };
+                  }}
+                  onEachFeature={(feature, layer) => {
+                    const vName = getVillageName(feature) || "Village";
+                    const shares = feature.properties?.party_shares || {};
+                    const targetShare = shares[targetParty];
+                    const hasData =
+                      targetShare !== undefined && targetShare !== null && feature.properties?.votes_polled > 0;
+                    const tier = getVotePercentageTier(targetShare, thresholds);
+                    const polled = feature.properties?.votes_polled;
+
+                    let tooltipHtml = `<strong>${vName}</strong>`;
+                    if (polled) {
+                      tooltipHtml += `<br/><small style="color:#94a3b8">Polled: ${polled.toLocaleString("en-IN")}</small>`;
+                    }
+                    if (hasData) {
+                      tooltipHtml += `<br/><span style="display:inline-block;width:8px;height:8px;background:${tier.color};border-radius:2px;margin-right:4px;"></span>${targetParty}: <b>${targetShare}%</b> (${tier.tier.toUpperCase()})`;
+                    } else {
+                      tooltipHtml += `<br/><small style="color:#64748b">No booth mapping</small>`;
+                    }
+                    if (secondaryParty && secondaryParty !== "none" && hasData) {
+                      const p2Share = shares[secondaryParty];
+                      if (p2Share !== undefined && p2Share !== null) {
+                        const p2Tier = getVotePercentageTier(p2Share, thresholds);
+                        tooltipHtml += `<br/><span style="display:inline-block;width:8px;height:8px;background:${p2Tier.color};border-radius:2px;margin-right:4px;"></span>${secondaryParty}: <b>${p2Share}%</b> (${p2Tier.tier.toUpperCase()})`;
+                      }
+                    }
+
+                    layer.bindTooltip(tooltipHtml, { sticky: true });
+                    layer.on({
+                      click: () => {
+                        setSelectedVillage(String(vName));
+                        setSelectedVillageFeature(feature);
+                        setMapLevel("village");
+                      },
+                      mouseover: (event) => event.target.setStyle({ weight: 3.5, fillOpacity: 0.65 }),
+                      mouseout: (event) => {
+                        const isSelected =
+                          selectedVillage &&
+                          String(selectedVillage).trim().toLowerCase() === String(vName).trim().toLowerCase();
+                        event.target.setStyle({
+                          color: isSelected ? "#38bdf8" : (hasData ? tier.color : "#475569"),
+                          weight: isSelected ? 3.5 : (hasData ? 2 : 1),
+                          fillOpacity: isSelected ? 0.65 : (hasData ? 0.38 : 0.12),
+                        });
+                      },
+                    });
                   }}
                 />
               )}
@@ -1546,48 +2331,80 @@ export default function App() {
             {layersVisible.villageHotspots &&
               selectedAssemblyNumber &&
               villages?.features?.length > 0 &&
-              villages.features.map((feature, index) => {
-                const villageName = getVillageName(feature) || `Village ${index + 1}`;
-                const position = getFeatureCenter(feature);
-                if (!position) return null;
+              villages.features
+                .filter((feature) => {
+                  if (tierFilter && tierFilter !== "all") {
+                    const shares = feature.properties?.party_shares || {};
+                    const targetShare = shares[targetParty];
+                    if (targetShare === undefined || targetShare === null || !(feature.properties?.votes_polled > 0)) return false;
+                    const tier = getVotePercentageTier(targetShare, thresholds);
+                    if (tier.tier !== tierFilter) return false;
+                  }
+                  return true;
+                })
+                .map((feature, index) => {
+                  const villageName = getVillageName(feature) || `Village ${index + 1}`;
+                  const position = getFeatureCenter(feature);
+                  if (!position) return null;
 
-                const isSelected =
-                  String(selectedVillage).trim().toLowerCase() === String(villageName).trim().toLowerCase();
+                  const isSelected =
+                    String(selectedVillage).trim().toLowerCase() === String(villageName).trim().toLowerCase();
+                  const shares = feature.properties?.party_shares || {};
+                  const targetShare = shares[targetParty];
+                  const hasData =
+                    targetShare !== undefined && targetShare !== null && feature.properties?.votes_polled > 0;
+                  const tier = getVotePercentageTier(targetShare, thresholds);
+                  const markerColor = isSelected ? "#38bdf8" : (hasData ? tier.color : "#64748b");
 
-                const markerIcon = L.divIcon({
-                  className: "village-location-marker",
-                  html: `
-                    <div style="width:38px;height:46px;display:flex;align-items:flex-start;justify-content:center;position:relative;">
-                      <div style="width:30px;height:30px;position:relative;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${isSelected ? "#2563eb" : "#dc2626"};border:3px solid #fff;box-shadow:0 4px 10px rgba(15,23,42,.4);">
-                        <span style="position:absolute;width:10px;height:10px;background:#fff;border-radius:50%;top:7px;left:7px;"></span>
+                  const markerIcon = L.divIcon({
+                    className: "village-location-marker",
+                    html: `
+                      <div style="width:38px;height:46px;display:flex;align-items:flex-start;justify-content:center;position:relative;">
+                        <div style="width:30px;height:30px;position:relative;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${markerColor};border:3px solid #fff;box-shadow:0 4px 10px rgba(15,23,42,.4);">
+                          <span style="position:absolute;width:10px;height:10px;background:#fff;border-radius:50%;top:7px;left:7px;"></span>
+                        </div>
+                        <div style="position:absolute;width:10px;height:5px;background:rgba(0,0,0,.22);border-radius:50%;bottom:1px;"></div>
                       </div>
-                      <div style="position:absolute;width:10px;height:5px;background:rgba(0,0,0,.22);border-radius:50%;bottom:1px;"></div>
-                    </div>
-                  `,
-                  iconSize: [38, 46],
-                  iconAnchor: [19, 43],
-                });
+                    `,
+                    iconSize: [38, 46],
+                    iconAnchor: [19, 43],
+                  });
 
-                return (
-                  <Marker
-                    key={`village-hotspot-${index}-${String(villageName)}`}
-                    position={position}
-                    zIndexOffset={isSelected ? 1000 : 500}
-                    icon={markerIcon}
-                    eventHandlers={{
-                      click: () => {
-                        setSelectedVillage(String(villageName));
-                        setSelectedVillageFeature(feature);
-                        setMapLevel("village");
-                      },
-                    }}
-                  >
-                    <Tooltip direction="top" offset={[0, -40]} opacity={1}>
-                      <strong>{villageName}</strong>
-                    </Tooltip>
-                  </Marker>
-                );
-              })}
+                  return (
+                    <Marker
+                      key={`village-hotspot-${index}-${String(villageName)}-${selectedElectionYear || "latest"}-${tierFilter}`}
+                      position={position}
+                      zIndexOffset={isSelected ? 1000 : 500}
+                      icon={markerIcon}
+                      eventHandlers={{
+                        click: () => {
+                          setSelectedVillage(String(villageName));
+                          setSelectedVillageFeature(feature);
+                          setMapLevel("village");
+                        },
+                      }}
+                    >
+                      <Tooltip direction="top" offset={[0, -40]} opacity={1}>
+                        <strong>{villageName}</strong>
+                        {hasData && (
+                          <div style={{ fontSize: "11px", marginTop: "2px" }}>
+                            <span
+                              style={{
+                                display: "inline-block",
+                                width: "8px",
+                                height: "8px",
+                                backgroundColor: tier.color,
+                                borderRadius: "2px",
+                                marginRight: "4px",
+                              }}
+                            />
+                            {targetParty}: <b>{targetShare}%</b> ({tier.tier.toUpperCase()})
+                          </div>
+                        )}
+                      </Tooltip>
+                    </Marker>
+                  );
+                })}
 
             <MapController
               selectedFeature={
@@ -1601,40 +2418,251 @@ export default function App() {
             />
           </MapContainer>
 
-          <MapLayerControl
-            layersVisible={layersVisible}
-            toggleLayer={toggleLayer}
-            setAllLayers={setAllLayers}
-          />
-
-          <div className="map-topbar">
-            <div className="map-location">
-              <span className="map-pin">◉</span>
-              <div>
-                <small>CURRENT VIEW</small>
-                <strong>{currentLevel}</strong>
+          {/* REFERENCE UI OVERLAY: Top District, Current View & Stats Bar */}
+          <div className="reference-top-bar">
+            <div className="reference-left-cluster">
+              <MapLayerControl
+                layersVisible={layersVisible}
+                toggleLayer={toggleLayer}
+                setAllLayers={setAllLayers}
+              />
+              <div className="reference-district-title">
+                <span>{selectedDistrict ? selectedDistrict.toUpperCase() : selectedState ? selectedState.toUpperCase() : "UTTAR PRADESH"}</span>
+                <span className="seats-badge">• {assemblyOptions.length || (assemblies?.features?.length ?? 6)} SEATS</span>
               </div>
+              <div className="reference-view-tag">
+                <span className="reference-view-dot" />
+                <span>{currentLevel} View</span>
+              </div>
+              {tierFilter !== "all" && (
+                <div
+                  className={`reference-filter-tag ${tierFilter === "amber" ? "amber-filter" : ""}`}
+                  onClick={() => setTierFilter("all")}
+                  title="Click to clear filter"
+                  role="button"
+                  tabIndex={0}
+                >
+                  <span
+                    className="tier-dot"
+                    style={{
+                      backgroundColor:
+                        tierFilter === "amber"
+                          ? thresholds.tier2Color
+                          : tierFilter === "red"
+                          ? thresholds.tier1Color
+                          : tierFilter === "yellow"
+                          ? thresholds.tier3Color
+                          : thresholds.tier4Color,
+                    }}
+                  />
+                  <span>FILTER: {tierFilter.toUpperCase()} ONLY</span>
+                  <span className="filter-clear-cross">×</span>
+                </div>
+              )}
             </div>
 
-            <div className="map-breadcrumb">
-              India
-              {selectedState && ` / ${selectedState}`}
-              {selectedDistrict && ` / ${selectedDistrict}`}
-              {selectedAssembly && ` / ${selectedAssembly}`}
-              {selectedVillage && ` / ${selectedVillage}`}
+            <div className="reference-right-cluster">
+              <div className="reference-voters-stat">
+                <span className="reference-voters-num">
+                  {assemblyDashboard?.electors
+                    ? (assemblyDashboard.electors / 100000).toFixed(1)
+                    : assemblies?.features?.length
+                    ? (assemblies.features.reduce((acc, f) => acc + (f.properties?.electors || 330000), 0) / 100000).toFixed(1)
+                    : "20.3"}
+                </span>
+                <span className="reference-voters-label">lakh voters</span>
+              </div>
             </div>
-
-            {selectedDistrict && !assembliesHaveBoundaries && (
-              <div className="map-data-notice">
-                Assembly records are available, but boundary geometry is empty. Choose an assembly from the sidebar to open its dashboard.
-              </div>
-            )}
-            {selectedAssembly && villageOptions.length > 0 && !villagesHaveGeometry && (
-              <div className="map-data-notice">
-                Village records are available, but map geometry is empty.
-              </div>
-            )}
           </div>
+
+          {tierFilter !== "all" && currentLevelFilterMatchCount === 0 && (
+            <div className="filter-empty-banner">
+              <span>⚠️ No <strong>{tierFilter.toUpperCase()}</strong> {currentLevel}s found for {targetParty}.</span>
+              <button type="button" className="filter-clear-btn" onClick={() => setTierFilter("all")}>
+                Clear Filter
+              </button>
+            </div>
+          )}
+
+          {(selectedDistrict && !assembliesHaveBoundaries) && (
+            <div className="map-data-notice" style={{ position: "absolute", top: "68px", left: "20px", zIndex: 650 }}>
+              Assembly records are available, but boundary geometry is empty. Choose an assembly from the sidebar to open its dashboard.
+            </div>
+          )}
+          {(selectedAssembly && villageOptions.length > 0 && !villagesHaveGeometry) && (
+            <div className="map-data-notice" style={{ position: "absolute", top: "68px", left: "20px", zIndex: 650 }}>
+              Village records are available, but map geometry is empty.
+            </div>
+          )}
+
+          {/* REFERENCE UI OVERLAY: Demarcation Legend */}
+          <div className="demarcation-legend">
+            <div className="demarcation-legend-title">
+              <span>DEMARCATION TIERS</span>
+              <span className="target-pill">{targetParty}</span>
+              {secondaryParty && secondaryParty !== "none" && (
+                <span className="target-pill" style={{ background: "rgba(245, 158, 11, 0.2)", color: "#f59e0b" }}>
+                  vs {secondaryParty}
+                </span>
+              )}
+            </div>
+            <div className="demarcation-tiers">
+              {(() => {
+                const getScopeCount = (tierName) => {
+                  if (currentLevel === "Village") return scopeTierCounts.villages[tierName] ?? 0;
+                  if (currentLevel === "Assembly") return scopeTierCounts.assemblies[tierName] ?? 0;
+                  if (currentLevel === "District") return scopeTierCounts.districts[tierName] ?? 0;
+                  return null;
+                };
+
+                const redCount = getScopeCount("red");
+                const amberCount = getScopeCount("amber");
+                const yellowCount = getScopeCount("yellow");
+                const greenCount = getScopeCount("green");
+
+                return (
+                  <>
+                    <div
+                      className={`demarcation-tier-chip clickable ${tierFilter === "red" ? "active-tier" : ""}`}
+                      onClick={() => setTierFilter((prev) => (prev === "red" ? "all" : "red"))}
+                      title={`Click to filter Tier 1 (Red: < ${thresholds.tier1Max}%)${redCount !== null ? ` — ${redCount} ${currentLevel}s` : ""}`}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <span className="tier-dot" style={{ backgroundColor: thresholds.tier1Color, color: thresholds.tier1Color }} />
+                      <span>&lt; {thresholds.tier1Max}%</span>
+                      {redCount !== null && <span className="tier-chip-count">{redCount}</span>}
+                      {tierFilter === "red" && <span className="tier-check">✓</span>}
+                    </div>
+                    <div
+                      className={`demarcation-tier-chip clickable ${tierFilter === "amber" ? "active-tier amber-active" : ""}`}
+                      onClick={() => setTierFilter((prev) => (prev === "amber" ? "all" : "amber"))}
+                      title={`Click to filter Tier 2 (Amber: ${thresholds.tier1Max}-${thresholds.tier2Max}%)${amberCount !== null ? ` — ${amberCount} ${currentLevel}s` : ""}`}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <span className="tier-dot" style={{ backgroundColor: thresholds.tier2Color, color: thresholds.tier2Color }} />
+                      <span>{thresholds.tier1Max}-{thresholds.tier2Max}%</span>
+                      {amberCount !== null && <span className="tier-chip-count">{amberCount}</span>}
+                      {tierFilter === "amber" && <span className="tier-check">✓</span>}
+                    </div>
+                    <div
+                      className={`demarcation-tier-chip clickable ${tierFilter === "yellow" ? "active-tier" : ""}`}
+                      onClick={() => setTierFilter((prev) => (prev === "yellow" ? "all" : "yellow"))}
+                      title={`Click to filter Tier 3 (Yellow: ${thresholds.tier2Max}-${thresholds.tier3Max}%)${yellowCount !== null ? ` — ${yellowCount} ${currentLevel}s` : ""}`}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <span className="tier-dot" style={{ backgroundColor: thresholds.tier3Color, color: thresholds.tier3Color }} />
+                      <span>{thresholds.tier2Max}-{thresholds.tier3Max}%</span>
+                      {yellowCount !== null && <span className="tier-chip-count">{yellowCount}</span>}
+                      {tierFilter === "yellow" && <span className="tier-check">✓</span>}
+                    </div>
+                    <div
+                      className={`demarcation-tier-chip clickable ${tierFilter === "green" ? "active-tier" : ""}`}
+                      onClick={() => setTierFilter((prev) => (prev === "green" ? "all" : "green"))}
+                      title={`Click to filter Tier 4 (Green: > ${thresholds.tier3Max}%)${greenCount !== null ? ` — ${greenCount} ${currentLevel}s` : ""}`}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <span className="tier-dot" style={{ backgroundColor: thresholds.tier4Color, color: thresholds.tier4Color }} />
+                      <span>&gt; {thresholds.tier3Max}%</span>
+                      {greenCount !== null && <span className="tier-chip-count">{greenCount}</span>}
+                      {tierFilter === "green" && <span className="tier-check">✓</span>}
+                    </div>
+                  </>
+                );
+              })()}
+            </div>
+          </div>
+
+          {/* REFERENCE UI OVERLAY: Bottom Winner Breakdown Bar */}
+          <div className="reference-bottom-bar">
+            <div className="reference-bottom-title">
+              <span>{selectedElectionYear || "2022"} ASSEMBLY WINNERS</span>
+              <span style={{ color: "#cbd5e1" }}>
+                {assemblies?.features?.length ? `${assemblies.features.length} ACs Tracked` : "Summary"}
+              </span>
+            </div>
+
+            {/* Segmented bar */}
+            <div className="reference-segmented-bar">
+              {(() => {
+                const acFeatures = assemblies?.features || [];
+                const counts = { RLD: 0, BJP: 0, SP: 0, BSP: 0, INC: 0, OTH: 0 };
+                acFeatures.forEach((f) => {
+                  const w = f.properties?.winner || "OTH";
+                  if (counts[w] !== undefined) counts[w] += 1;
+                  else counts.OTH += 1;
+                });
+                const total = acFeatures.length || 1;
+                return [
+                  { party: "RLD", count: counts.RLD, color: "#16a34a" },
+                  { party: "BJP", count: counts.BJP, color: "#f97316" },
+                  { party: "SP", count: counts.SP, color: "#ef4444" },
+                  { party: "BSP", count: counts.BSP, color: "#2563eb" },
+                  { party: "INC", count: counts.INC, color: "#0284c7" },
+                ]
+                  .filter((item) => item.count > 0)
+                  .map((item) => (
+                    <div
+                      key={item.party}
+                      className="reference-segment"
+                      style={{
+                        width: `${(item.count / total) * 100}%`,
+                        backgroundColor: item.color,
+                      }}
+                      title={`${item.party}: ${item.count} seats`}
+                    />
+                  ));
+              })()}
+            </div>
+
+            {/* Prominent Party Tally Cards */}
+            <div className="reference-party-cards">
+              {(() => {
+                const acFeatures = assemblies?.features || [];
+                const counts = { RLD: 0, BJP: 0, SP: 0 };
+                acFeatures.forEach((f) => {
+                  const w = f.properties?.winner;
+                  if (w && counts[w] !== undefined) counts[w] += 1;
+                });
+                return [
+                  { party: "RLD", count: counts.RLD, bg: "#16a34a" },
+                  { party: "BJP", count: counts.BJP, bg: "#f97316" },
+                  { party: "SP", count: counts.SP, bg: "#ef4444" },
+                ].map((card) => (
+                  <div
+                    key={card.party}
+                    className="reference-party-card"
+                    style={{ backgroundColor: card.bg }}
+                    onClick={() => {
+                      if (card.party === "RLD") {
+                        setTargetParty("RLD");
+                      } else {
+                        setSecondaryParty(card.party);
+                      }
+                    }}
+                    title={card.party === "RLD" ? "Primary Target: RLD" : `Click to set comparison vs ${card.party}`}
+                    role="button"
+                    tabIndex={0}
+                  >
+                    <div className="reference-party-count">{card.count}</div>
+                    <div className="reference-party-name">{card.party}</div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </div>
+
+          {/* Settings Modal */}
+          {settingsOpen && (
+            <SettingsModal
+              thresholds={thresholds}
+              onSave={handleSaveThresholds}
+              onClose={() => setSettingsOpen(false)}
+            />
+          )}
 
           {selectedState && !dashboardOpen && (
             <button
@@ -1660,6 +2688,11 @@ export default function App() {
               selectedElectionYear={selectedElectionYear}
               onElectionYearChange={setSelectedElectionYear}
               level={activeGeography.level}
+              targetParty={targetParty}
+              thresholds={thresholds}
+              tierFilter={tierFilter}
+              setTierFilter={setTierFilter}
+              tierCounts={scopeTierCounts}
             />
           )}
           {callReportsOpen && selectedState && (

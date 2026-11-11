@@ -1712,13 +1712,13 @@ button:disabled {
   box-sizing: border-box;
 }
 
-/* Map layer control stays at the top-left of the map */
+/* Map layer control stays at the top-right of the map */
 .map-layer-control,
 .layer-control-wrapper {
   position: absolute;
-  top: 12px;
-  left: 12px;
-  right: auto;
+  top: 16px;
+  right: 20px;
+  left: auto;
   z-index: 1200;
 }
 
@@ -1783,9 +1783,9 @@ button:disabled {
 }
 .map-layer-control {
   position: absolute;
-  top: 78px;
-  left: 16px;
-  right: auto;
+  top: 16px;
+  right: 20px;
+  left: auto;
   z-index: 1200;
   font-family: Inter, ui-sans-serif, system-ui, sans-serif;
 }
@@ -2069,7 +2069,8 @@ button:disabled {
 @media (max-width: 700px) {
   .map-layer-control {
     top: 68px;
-    left: 10px;
+    right: 10px;
+    left: auto;
   }
 
   .layer-panel {
@@ -2078,7 +2079,7 @@ button:disabled {
   }
 
   .dashboard-reopen-button {
-    top: 68px;
+    top: 116px;
     right: 10px;
     max-width: 170px;
   }

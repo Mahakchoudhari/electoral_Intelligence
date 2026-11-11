@@ -11,12 +11,17 @@ from . import data
 @strawberry.type
 class Query:
     @strawberry.field
-    def states(self) -> JSON:
-        return data.states()
+    async def states(self, info: strawberry.Info, election_year: int | None = None) -> JSON:
+        return await data.states(info.context["pool"], election_year)
 
     @strawberry.field
-    async def districts(self, info: strawberry.Info, state: str | None = None) -> JSON:
-        return await data.districts(info.context["pool"], state)
+    async def districts(
+        self,
+        info: strawberry.Info,
+        state: str | None = None,
+        election_year: int | None = None,
+    ) -> JSON:
+        return await data.districts(info.context["pool"], state, election_year)
 
     @strawberry.field
     async def assemblies(
@@ -24,12 +29,18 @@ class Query:
         info: strawberry.Info,
         district: str | None = None,
         district_code: str | None = None,
+        election_year: int | None = None,
     ) -> JSON:
-        return await data.assemblies(info.context["pool"], district, district_code)
+        return await data.assemblies(info.context["pool"], district, district_code, election_year)
 
     @strawberry.field
-    async def villages(self, info: strawberry.Info, ac_no: str) -> JSON:
-        return await data.villages(info.context["pool"], ac_no)
+    async def villages(
+        self,
+        info: strawberry.Info,
+        ac_no: str,
+        election_year: int | None = None,
+    ) -> JSON:
+        return await data.villages(info.context["pool"], ac_no, election_year)
 
     @strawberry.field
     async def call_reports(
@@ -47,8 +58,13 @@ class Query:
         )
 
     @strawberry.field
-    async def assembly_dashboard(self, info: strawberry.Info, ac_no: str) -> JSON | None:
-        return await data.assembly_dashboard(info.context["pool"], ac_no)
+    async def assembly_dashboard(
+        self,
+        info: strawberry.Info,
+        ac_no: str,
+        election_year: int | None = None,
+    ) -> JSON | None:
+        return await data.assembly_dashboard(info.context["pool"], ac_no, election_year)
 
     @strawberry.field
     async def poll_results(
@@ -81,6 +97,25 @@ class Query:
         return await data.election_years(
             info.context["pool"], state, district_code, ac_no, village_id, level, village_ids
         )
+
+    @strawberry.field
+    async def constituencies(
+        self,
+        info: strawberry.Info,
+        district_code: str | None = None,
+    ) -> JSON:
+        return await data.constituencies(info.context["pool"], district_code)
+
+
+    @strawberry.field
+    async def calling_stats(
+        self,
+        info: strawberry.Info,
+        ac_no: str | None = None,
+        village_id: int | None = None,
+    ) -> JSON:
+        return await data.calling_stats(info.context["pool"], ac_no, village_id)
+
 
 
 schema = strawberry.Schema(query=Query)

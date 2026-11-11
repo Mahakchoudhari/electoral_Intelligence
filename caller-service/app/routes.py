@@ -185,11 +185,31 @@ def get_pool(request: Request) -> Any:
     return pool
 
 
+TARGET_DISTRICT_NAMES = (
+    "Agra",
+    "Aligarh",
+    "Amroha",
+    "Baghpat",
+    "Bijnor",
+    "Bulandshahr",
+    "Gautam Buddha Nagar",
+    "Ghaziabad",
+    "Hathras",
+    "Mathura",
+    "Meerut",
+    "Moradabad",
+    "Muzaffarnagar",
+    "Saharanpur",
+    "Shamli",
+)
+
+
 @router.get("/districts")
 async def list_districts(request: Request, _: dict[str, Any] = Depends(require_user)):
+    names_tuple = ", ".join(f"'{name}'" for name in TARGET_DISTRICT_NAMES)
     rows = await get_pool(request).fetch(
-        """SELECT district_code, name FROM districts
-           WHERE upper(COALESCE(state_name, '')) IN ('UTTAR PRADESH', 'UP')
+        f"""SELECT district_code, name FROM districts
+           WHERE name IN ({names_tuple})
            ORDER BY name"""
     )
     return [{"district_code": row["district_code"], "name": row["name"]} for row in rows]
