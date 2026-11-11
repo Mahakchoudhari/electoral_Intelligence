@@ -13,6 +13,7 @@ export default function LoginScreen({ onLoginSuccess }) {
     setError("");
     setBusy(true);
 
+    try {
       const customApi = (import.meta.env.VITE_API_URL || import.meta.env.VITE_CALLER_API_URL || "").replace(/\/+$/, "");
       const customGql = (import.meta.env.VITE_GRAPHQL_API || "").replace(/\/graphql\/?$/, "").replace(/\/+$/, "");
       const base = customApi || customGql;
