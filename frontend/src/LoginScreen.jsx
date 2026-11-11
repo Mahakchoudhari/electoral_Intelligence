@@ -18,19 +18,18 @@ export default function LoginScreen({ onLoginSuccess }) {
       const customGql = (import.meta.env.VITE_GRAPHQL_API || "").replace(/\/graphql\/?$/, "").replace(/\/+$/, "");
       const base = customApi || customGql;
 
+      const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
+
       const endpoints = [];
       if (base) {
         endpoints.push(`${base}/api/auth/login`);
         endpoints.push(`${base}/api/caller/login`);
-      }
-      endpoints.push("/api/auth/login");
-      endpoints.push("/api/caller/login");
-
-      const isLocal = typeof window !== "undefined" && (window.location.hostname === "localhost" || window.location.hostname === "127.0.0.1");
-      if (isLocal) {
+      } else if (isLocal) {
         endpoints.push("http://127.0.0.1:8000/api/auth/login");
         endpoints.push("http://127.0.0.1:8001/api/caller/login");
       }
+      endpoints.push("/api/auth/login");
+      endpoints.push("/api/caller/login");
 
       let result = null;
       let lastErr = null;
