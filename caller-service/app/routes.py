@@ -377,6 +377,7 @@ async def list_sampark_sutras(
     village_id: int | None = None,
     ac_no: int | None = None,
     district_code: int | None = None,
+    never_called: bool = False,
     search: str | None = None,
     limit: int = 5000,
     request: Request = None,
@@ -399,6 +400,9 @@ async def list_sampark_sutras(
         conditions.append(f"a.district_code = ${idx}")
         params.append(district_code)
         idx += 1
+
+    if never_called:
+        conditions.append("NOT EXISTS (SELECT 1 FROM public.\"call\" c WHERE c.sid = ss.sid)")
 
     if search and search.strip():
         term = f"%{search.strip()}%"
@@ -669,7 +673,7 @@ async def get_contact_calls(
     rows = await pool.fetch(
         """SELECT c.cid, c.sid, c.created_at,
                   to_char(timezone('Asia/Kolkata', c.created_at), 'DD Mon YYYY, HH24:MI') AS call_time,
-                  c.summary, c.category, c.feedback,
+                  c.summary, c.category, c.feedback, c.provider,
                   lower(COALESCE(c.flag, '')) IN ('true', '1', 'yes', 'problem', 'substantive') AS has_problem,
                   u.username AS caller_username
            FROM public."call" c
@@ -689,6 +693,7 @@ async def get_contact_calls(
             "category": r["category"],
             "feedback": r["feedback"],
             "has_problem": r["has_problem"],
+            "provider": r["provider"],
         }
         for r in rows
     ]
@@ -817,7 +822,7 @@ async def fetch_filtered_admin_calls(
                to_char(timezone('Asia/Kolkata', c.created_at), 'HH24:MI') AS call_time,
                to_char(timezone('Asia/Kolkata', c.created_at), 'YYYY-MM-DD HH24:MI:SS') AS created_at_formatted,
                c.created_at,
-               c.summary, c.category, c.feedback,
+               c.summary, c.category, c.feedback, c.provider,
                lower(COALESCE(c.flag, '')) IN ('true', '1', 'yes', 'problem', 'substantive') AS has_problem,
                ss.name AS sampark_sutra_name, ss.phone AS sampark_sutra_phone,
                v.name AS village_name,
@@ -925,6 +930,7 @@ async def admin_activity(
             "category": row["category"] or "General / Uncategorized",
             "feedback": row["feedback"],
             "has_problem": has_problem,
+            "provider": row["provider"],
         }
         group["calls"].append(call_item)
         all_calls.append(call_item)

@@ -105,7 +105,6 @@ const blankSutraForm = {
   phone: "",
   fathers_name: "",
   age: "",
-  caste: "",
   epic_id: "",
   social_media: "",
   flag: "",
@@ -117,7 +116,6 @@ const blankNewContact = {
   village_id: "",
   fathers_name: "",
   age: "",
-  caste: "",
   epic_id: "",
   social_media: "",
   flag: "Reliable",
@@ -137,6 +135,7 @@ export default function CallerDashboard() {
   const [acNo, setAcNo] = useState("");
   const [villageId, setVillageId] = useState("");
   const [searchTerm, setSearchTerm] = useState("");
+  const [neverCalledOnly, setNeverCalledOnly] = useState(false);
   const [activeContact, setActiveContact] = useState(null);
   const [activeContactCalls, setActiveContactCalls] = useState([]);
   const [loadingCalls, setLoadingCalls] = useState(false);
@@ -220,6 +219,9 @@ export default function CallerDashboard() {
     } else if (districtCode) {
       url += `district_code=${encodeURIComponent(districtCode)}`;
     }
+    if (neverCalledOnly) {
+      url += "&never_called=true";
+    }
     request(url, token)
       .then((data) => {
         if (!cancelled) setContacts(data);
@@ -230,7 +232,7 @@ export default function CallerDashboard() {
     return () => {
       cancelled = true;
     };
-  }, [token, districtCode, acNo, villageId]);
+  }, [token, districtCode, acNo, villageId, neverCalledOnly]);
 
   // Load villages for Add Modal when an AC is selected
   useEffect(() => {
@@ -313,7 +315,6 @@ export default function CallerDashboard() {
     if (!contact.flag) count++;
     if (!contact.fathers_name) count++;
     if (contact.age == null) count++;
-    if (!contact.caste) count++;
     if (!contact.epic_id) count++;
     if (!contact.social_media) count++;
     return count;
@@ -336,7 +337,6 @@ export default function CallerDashboard() {
       phone: contact.phone || "",
       fathers_name: contact.fathers_name || "",
       age: contact.age != null ? String(contact.age) : "",
-      caste: contact.caste || "",
       epic_id: contact.epic_id || "",
       social_media: contact.social_media || "",
       flag: contact.flag || "",
@@ -363,7 +363,6 @@ export default function CallerDashboard() {
         phone: sutraForm.phone.trim() || undefined,
         fathers_name: sutraForm.fathers_name.trim() || null,
         age: sutraForm.age ? parseInt(sutraForm.age, 10) : null,
-        caste: sutraForm.caste.trim() || null,
         epic_id: sutraForm.epic_id.trim() || null,
         social_media: sutraForm.social_media.trim() || null,
         flag: sutraForm.flag.trim() || null,
@@ -374,7 +373,7 @@ export default function CallerDashboard() {
       });
       setContacts((prev) => prev.map((c) => (c.sid === updated.sid ? { ...c, ...updated } : c)));
       setActiveContact((prev) => ({ ...prev, ...updated }));
-      setNotice(`Updated ${updated.name}'s details in database. Change logged in audit trail.`);
+      setNotice(`Updated ${updated.name}'s details successfully.`);
     } catch (error) { setPageError(error.message); }
     finally { setBusy(false); }
   }
@@ -389,7 +388,6 @@ export default function CallerDashboard() {
         phone: sutraForm.phone.trim() || undefined,
         fathers_name: sutraForm.fathers_name.trim() || null,
         age: sutraForm.age ? parseInt(sutraForm.age, 10) : null,
-        caste: sutraForm.caste.trim() || null,
         epic_id: sutraForm.epic_id.trim() || null,
         social_media: sutraForm.social_media.trim() || null,
         flag: sutraForm.flag.trim() || null,
@@ -422,7 +420,7 @@ export default function CallerDashboard() {
         })
       );
       setActiveContact(null); setCall(blankCall);
-      setNotice(`Call saved · reference #${result.report_id}${result.updated_sutra ? " · Profile updated in database" : ""}`);
+      setNotice(`Call saved successfully #${result.report_id}`);
     } catch (error) { setPageError(error.message); }
     finally { setBusy(false); }
   }
@@ -450,7 +448,6 @@ export default function CallerDashboard() {
         village_id: Number(newContact.village_id),
         fathers_name: newContact.fathers_name.trim() || null,
         age: newContact.age ? parseInt(newContact.age, 10) : null,
-        caste: newContact.caste.trim() || null,
         epic_id: newContact.epic_id.trim() || null,
         social_media: newContact.social_media.trim() || null,
         flag: newContact.flag.trim() || null,
@@ -461,7 +458,7 @@ export default function CallerDashboard() {
       });
       setContacts((prev) => [created, ...prev]);
       setShowAddModal(false);
-      setNotice(`Added new Sampark Sutra '${created.name}' (${created.phone}) · Logged in audit trail.`);
+      setNotice(`Added new contact '${created.name}' (${created.phone})`);
       setNewContact(blankNewContact);
     } catch (error) { setPageError(error.message); }
     finally { setBusy(false); }
@@ -502,8 +499,9 @@ export default function CallerDashboard() {
     finally { setAuditLoading(false); }
   }
 
-  // Filtered contacts based on search input
+  // Filtered contacts based on search input and never called filter
   const filteredContacts = contacts.filter((c) => {
+    if (neverCalledOnly && (c.call_count || 0) > 0) return false;
     if (!searchTerm.trim()) return true;
     const term = searchTerm.toLowerCase();
     return (
@@ -512,7 +510,6 @@ export default function CallerDashboard() {
       (c.fathers_name && c.fathers_name.toLowerCase().includes(term)) ||
       (c.village_name && c.village_name.toLowerCase().includes(term)) ||
       (c.ac_name && c.ac_name.toLowerCase().includes(term)) ||
-      (c.caste && c.caste.toLowerCase().includes(term)) ||
       (c.epic_id && c.epic_id.toLowerCase().includes(term))
     );
   });
@@ -1674,11 +1671,11 @@ export default function CallerDashboard() {
       <section className="caller-main">
         <div className="caller-page-title">
           <div>
-            <div className="caller-kicker">CALL MANAGEMENT <span>•</span> FIELD OPERATIONS</div>
-            <h1>Grassroots intelligence</h1>
-            <p>Select a District, Assembly Constituency or Village to access and manage Sampark Sutras.</p>
+            <div className="caller-kicker">CALL CENTER <span>•</span> CALL CALLER PANEL</div>
+            <h1>Call Center Dashboard</h1>
+            <p>Choose District, Assembly or Village to find and call contacts.</p>
           </div>
-          <div className="caller-time"><span className="caller-live-dot"/> READY TO RECORD</div>
+          <div className="caller-time"><span className="caller-live-dot"/> READY TO CALL</div>
         </div>
 
         <section className="caller-area-card">
@@ -1686,34 +1683,34 @@ export default function CallerDashboard() {
             <div>
               <span className="caller-icon">⌖</span>
               <div>
-                <h2>Constituency Navigation</h2>
-                <p>Browse Sampark Sutras at District, Assembly Constituency or Village level.</p>
+                <h2>Select Location (स्थान चुनें)</h2>
+                <p>Select District, Assembly or Village to see contact numbers.</p>
               </div>
             </div>
-            <span className="required-label">FLEXIBLE FILTERING</span>
+            <span className="required-label">EASY FILTER</span>
           </div>
 
           <div className="caller-select-grid">
             <label>
-              District
+              District (ज़िला)
               <select value={districtCode} onChange={(e) => { setDistrictCode(e.target.value); setAcNo(""); setVillageId(""); setPageError(""); }}>
-                <option value="">Select district</option>
+                <option value="">-- Select District (ज़िला चुनें) --</option>
                 {districts.map((item) => <option key={item.district_code} value={item.district_code}>{item.name}</option>)}
               </select>
             </label>
 
             <label>
-              Assembly constituency
+              Assembly (विधानसभा)
               <select value={acNo} disabled={!districtCode} onChange={(e) => { setAcNo(e.target.value); setVillageId(""); setPageError(""); }}>
-                <option value="">{districtCode ? "All assemblies in district" : "Choose district first"}</option>
+                <option value="">{districtCode ? "All Assemblies in District (सभी विधानसभा)" : "Choose District first"}</option>
                 {assemblies.map((item) => <option key={item.ac_no} value={item.ac_no}>{item.name}</option>)}
               </select>
             </label>
 
             <label>
-              Village
+              Village / Town (गाँव / कस्बा)
               <select value={villageId} disabled={!acNo} onChange={(e) => { setVillageId(e.target.value); setPageError(""); setNotice(""); }}>
-                <option value="">{acNo ? (villages.length ? "All villages in assembly" : "No villages with contacts") : "Choose assembly first"}</option>
+                <option value="">{acNo ? (villages.length ? "All Villages in Assembly (सभी गाँव)" : "No contacts in villages") : "Choose Assembly first"}</option>
                 {villages.map((item) => <option key={item.village_id} value={item.village_id}>{item.name}{item.contact_count != null ? ` (${item.contact_count})` : ""}</option>)}
               </select>
             </label>
@@ -1730,21 +1727,29 @@ export default function CallerDashboard() {
             <div className="caller-list-heading">
               <div>
                 <div className="caller-kicker">{activeLevelInfo.level}</div>
-                <h2>{activeLevelInfo.name} <span>{filteredContacts.length}</span></h2>
+                <h2>{activeLevelInfo.name} <span>{filteredContacts.length} contacts</span></h2>
               </div>
               <div className="caller-list-controls">
+                <button
+                  type="button"
+                  className={`caller-action-btn ${neverCalledOnly ? "filter-active" : ""}`}
+                  onClick={() => setNeverCalledOnly((prev) => !prev)}
+                  title="Show only contacts who have never been called before"
+                >
+                  {neverCalledOnly ? "✓ Never Called Only (सिर्फ नए संपर्क)" : "📞 Show Never Called Only"}
+                </button>
                 <div className="caller-search-box">
                   <span className="caller-search-icon">🔍</span>
                   <input
                     type="search"
                     className="caller-search-input"
-                    placeholder="Search name, phone, or village…"
+                    placeholder="Search by name, phone number, or village…"
                     value={searchTerm}
                     onChange={(e) => setSearchTerm(e.target.value)}
                   />
                 </div>
                 <button className="caller-action-btn primary" onClick={openAddModal}>
-                  + Add Sampark Sutra
+                  + Add New Contact
                 </button>
               </div>
             </div>
@@ -1765,7 +1770,7 @@ export default function CallerDashboard() {
                         <strong>{contact.name}</strong>
                         {contact.call_count > 0 ? (
                           <span className="contact-call-count-pill" style={{ marginLeft: "8px" }}>
-                            {contact.call_count} call{contact.call_count === 1 ? "" : "s"}
+                            {contact.call_count} call{contact.call_count === 1 ? "" : "s"} done
                           </span>
                         ) : null}
                       </div>
@@ -1773,18 +1778,17 @@ export default function CallerDashboard() {
                       <span>
                         {[
                           contact.phone,
-                          contact.fathers_name && `S/o ${contact.fathers_name}`,
-                          contact.age && `${contact.age} yrs`,
-                          contact.caste,
-                          contact.epic_id && `EPIC: ${contact.epic_id}`,
-                        ].filter(Boolean).join(" · ") || "Contact details not provided"}
+                          contact.fathers_name && `Father: ${contact.fathers_name}`,
+                          contact.age && `Age: ${contact.age} yrs`,
+                          contact.epic_id && `Voter ID: ${contact.epic_id}`,
+                        ].filter(Boolean).join(" · ") || "No phone / details added"}
                       </span>
 
                       {/* Display Location tag when viewing across AC or District */}
                       {(contact.village_name || contact.ac_name) && (
                         <div style={{ marginTop: "2px" }}>
                           <span className="contact-location-pill">
-                            {[contact.ac_name && `AC: ${contact.ac_name}`, contact.village_name && `Village: ${contact.village_name}`].filter(Boolean).join(" • ")}
+                            {[contact.ac_name && `Assembly: ${contact.ac_name}`, contact.village_name && `Village: ${contact.village_name}`].filter(Boolean).join(" • ")}
                           </span>
                         </div>
                       )}
@@ -1796,20 +1800,20 @@ export default function CallerDashboard() {
                         {contact.flag}
                       </span>
                     ) : (
-                      <span className="contact-missing-tag">Flag unassessed</span>
+                      <span className="contact-missing-tag">Not Checked</span>
                     )}
 
                     {missingCount > 0 && (
-                      <span className="sutra-missing-pill" title="Fields missing in database">
-                        {missingCount} missing
+                      <span className="sutra-missing-pill" title="Details need to be collected">
+                        {missingCount} details needed
                       </span>
                     )}
 
                     <div className="contact-actions-row">
                       <button className="caller-record-button" onClick={() => openCall(contact)}>
-                        Record call <span>→</span>
+                        Call & Save Info <span>→</span>
                       </button>
-                      <button className="contact-delete-btn" title="Remove Sampark Sutra from roster" onClick={(e) => openDeleteModal(contact, e)}>
+                      <button className="contact-delete-btn" title="Delete contact" onClick={(e) => openDeleteModal(contact, e)}>
                         🗑
                       </button>
                     </div>
@@ -1818,8 +1822,8 @@ export default function CallerDashboard() {
               }) : (
                 <div className="caller-empty">
                   <span>⌕</span>
-                  <strong>{searchTerm ? `No contacts matching "${searchTerm}"` : "No Sampark Sutras found for this location"}</strong>
-                  <p>{searchTerm ? "Try searching by another term or clear the search input." : "Click '+ Add Sampark Sutra' to add a new grassroots contact here."}</p>
+                  <strong>{searchTerm ? `No contacts matching "${searchTerm}"` : "No contacts found here"}</strong>
+                  <p>{searchTerm ? "Check the spelling or try searching another name." : "Click '+ Add New Contact' to add a person to this list."}</p>
                 </div>
               )}
             </div>
@@ -1827,14 +1831,14 @@ export default function CallerDashboard() {
         ) : (
           <section className="caller-empty-area">
             <div className="empty-map-icon">⌖</div>
-            <strong>Select a location to browse contacts</strong>
-            <p>Choose a District to view all contacts in that district, or drill down to an Assembly Constituency or Village.</p>
+            <strong>Please select a District above to view contacts</strong>
+            <p>Select your District and Assembly to see the list of people to call.</p>
           </section>
         )}
 
         <footer className="caller-footer">
-          <span>Electoral Intelligence <b>·</b> Field Operations Console</span>
-          <span>Every conversation and roster change is stored securely with audit trail logging.</span>
+          <span>Electoral Intelligence <b>·</b> Call Center Panel</span>
+          <span>All call updates and notes are saved automatically.</span>
         </footer>
       </section>
 
@@ -1844,8 +1848,8 @@ export default function CallerDashboard() {
           <section className="caller-modal" role="dialog" aria-modal="true" aria-labelledby="call-form-title">
             <header className="caller-modal-header">
               <div>
-                <div className="caller-kicker">CALL ENTRY & CONVERSATION LOG</div>
-                <h2 id="call-form-title">Record conversation</h2>
+                <div className="caller-kicker">CALL ENTRY FORM</div>
+                <h2 id="call-form-title">Record Call (कॉल की जानकारी भरें)</h2>
               </div>
               <button className="modal-close" onClick={() => setActiveContact(null)} aria-label="Close">×</button>
             </header>
@@ -1854,7 +1858,7 @@ export default function CallerDashboard() {
               <span className="contact-avatar">{activeContact.name.split(/\s+/).slice(0, 2).map((part) => part[0]).join("").toUpperCase()}</span>
               <div>
                 <strong>{activeContact.name}</strong>
-                <span>{activeContact.phone || "Phone number not provided"} · {[activeContact.ac_name, activeContact.village_name].filter(Boolean).join(" • ")}</span>
+                <span>{activeContact.phone || "No phone number"} · {[activeContact.ac_name, activeContact.village_name].filter(Boolean).join(" • ")}</span>
               </div>
             </div>
 
@@ -1864,36 +1868,48 @@ export default function CallerDashboard() {
                 <div>
                   <span className="past-calls-icon">💬</span>
                   <div>
-                    <h4>Past Discussions & Call History</h4>
-                    <p>{loadingCalls ? "Loading previous calls…" : `${activeContactCalls.length} previous conversation${activeContactCalls.length === 1 ? "" : "s"} on record`}</p>
+                    <h4>Previous Calls & Notes (पिछली बात)</h4>
+                    <p>{loadingCalls ? "Loading..." : `${activeContactCalls.length} previous call${activeContactCalls.length === 1 ? "" : "s"} on record`}</p>
                   </div>
                 </div>
-                <span className="past-calls-toggle">{showCallsHistory ? "▴ Collapse" : "▾ Expand"}</span>
+                <span className="past-calls-toggle">{showCallsHistory ? "▴ Hide" : "▾ Show"}</span>
               </div>
 
               {showCallsHistory && (
                 <div className="past-calls-timeline">
                   {loadingCalls ? (
-                    <div className="past-calls-loading">Fetching discussion records…</div>
+                    <div className="past-calls-loading">Loading call history…</div>
                   ) : activeContactCalls.length ? (
-                    activeContactCalls.map((c) => (
-                      <article className="past-call-entry" key={c.cid}>
-                        <div className="past-call-meta">
-                          <time>{c.call_time}</time>
-                          <span className="past-caller-name">Caller: <b>{c.caller_username}</b></span>
-                          <span className={`admin-outcome ${c.has_problem ? "outcome-issue" : "outcome-clear"}`}>
-                            {c.has_problem ? "Issue Reported" : "No Issue"}
-                          </span>
-                          {c.category && <span className="admin-category">{c.category}</span>}
-                        </div>
-                        {c.summary && <p className="past-call-summary">{c.summary}</p>}
-                        {c.feedback && <div className="past-call-feedback"><b>Follow-up remarks:</b> {c.feedback}</div>}
-                      </article>
-                    ))
+                    activeContactCalls.map((c) => {
+                      const isCsvImport = c.provider === "roster-import" || (!c.provider && c.summary === "Roster remarks / past conversation");
+                      if (isCsvImport) {
+                        return (
+                          <article className="past-call-entry" key={c.cid} style={{ padding: "8px 11px", background: "#f8fafc" }}>
+                            <div style={{ fontSize: "11px", color: "#1e3c54", lineHeight: "1.45" }}>
+                              <b>Previous Remark:</b> {c.feedback || c.summary || "No remark"}
+                            </div>
+                          </article>
+                        );
+                      }
+                      return (
+                        <article className="past-call-entry" key={c.cid}>
+                          <div className="past-call-meta">
+                            <time>{c.call_time}</time>
+                            <span className="past-caller-name">Caller: <b>{c.caller_username}</b></span>
+                            <span className={`admin-outcome ${c.has_problem ? "outcome-issue" : "outcome-clear"}`}>
+                              {c.has_problem ? "Problem Reported" : "All Good / No Problem"}
+                            </span>
+                            {c.category && <span className="admin-category">{c.category}</span>}
+                          </div>
+                          {c.summary && <p className="past-call-summary">{c.summary}</p>}
+                          {c.feedback && <div className="past-call-feedback"><b>Notes:</b> {c.feedback}</div>}
+                        </article>
+                      );
+                    })
                   ) : (
                     <div className="past-calls-empty">
                       <span>ℹ</span>
-                      <span>No previous conversations logged for this contact. This is their first call on record.</span>
+                      <span>No previous calls yet. This is your first call to this person.</span>
                     </div>
                   )}
                 </div>
@@ -1902,25 +1918,25 @@ export default function CallerDashboard() {
 
             <form onSubmit={submitCall} className="caller-call-form">
               <fieldset className="call-outcome">
-                <legend>Did they raise an issue?</legend>
+                <legend>Did the person report any problem or complaint? (कोई समस्या है?)</legend>
                 <label className={!call.has_problem ? "outcome-active" : ""}>
                   <input type="radio" name="outcome" checked={!call.has_problem} onChange={() => setCall({ ...call, has_problem: false })}/>
-                  <span className="outcome-dot"/>No issue (Collect missing info)
+                  <span className="outcome-dot"/>No Problem / All Good (सब ठीक है)
                 </label>
                 <label className={call.has_problem ? "outcome-active" : ""}>
                   <input type="radio" name="outcome" checked={call.has_problem} onChange={() => setCall({ ...call, has_problem: true })}/>
-                  <span className="outcome-dot"/>Issue reported
+                  <span className="outcome-dot"/>Problem Reported (समस्या बताई)
                 </label>
               </fieldset>
 
               {call.has_problem ? (
                 <>
-                  <label>Issue summary <em>Required</em><textarea autoFocus rows="3" placeholder="Describe the issue shared during the conversation…" value={call.summary} onChange={(e) => setCall({ ...call, summary: e.target.value })} required /></label>
-                  <label>Category <em>Optional</em><select value={call.category} onChange={(e) => setCall({ ...call, category: e.target.value })}><option value="">Select a category</option><option>Roads & transport</option><option>Water supply</option><option>Electricity</option><option>Sanitation</option><option>Public services</option><option>Employment</option><option>Other</option></select></label>
-                  <label>Follow-up notes <em>Optional</em><textarea rows="2" placeholder="Any follow-up or additional context…" value={call.feedback} onChange={(e) => setCall({ ...call, feedback: e.target.value })}/></label>
+                  <label>Problem details (समस्या का विवरण) <em>Required *</em><textarea autoFocus rows="3" placeholder="What problem did the person mention? (जैसे सड़क, बिजली, पानी की समस्या...)" value={call.summary} onChange={(e) => setCall({ ...call, summary: e.target.value })} required /></label>
+                  <label>Problem Type (प्रकार) <em>Optional</em><select value={call.category} onChange={(e) => setCall({ ...call, category: e.target.value })}><option value="">-- Select Type (प्रकार चुनें) --</option><option>Roads & transport (सड़क एवं यातायात)</option><option>Water supply (पानी की समस्या)</option><option>Electricity (बिजली)</option><option>Sanitation & Cleanliness (सफाई व्यवस्था)</option><option>Public services (सरकारी काम / सेवाएं)</option><option>Employment / Jobs (रोज़गार)</option><option>Other (अन्य)</option></select></label>
+                  <label>Extra Notes (अतिरिक्त टिप्पणी) <em>Optional</em><textarea rows="2" placeholder="Any extra remarks or notes..." value={call.feedback} onChange={(e) => setCall({ ...call, feedback: e.target.value })}/></label>
 
                   <button type="button" className="sutra-existing-toggle" onClick={() => setShowPrimaryDetails(!showPrimaryDetails)}>
-                    <span>✎ Also update Sampark Sutra profile & reliability flag (optional)</span>
+                    <span>✎ Update person's details or reliability flag (व्यक्ति की जानकारी बदलें)</span>
                     <span>{showPrimaryDetails ? "▴ Hide" : "▾ Show"}</span>
                   </button>
                 </>
@@ -1930,12 +1946,12 @@ export default function CallerDashboard() {
                     <div className="sutra-profile-banner-left">
                       <div className="sutra-profile-banner-icon">📋</div>
                       <div>
-                        <h3>Collecting Missing Information</h3>
-                        <p>No issue reported. Collect unavailable contact info to complete their profile in the campaign database.</p>
+                        <h3>Complete Contact Information (जानकारी पूरी करें)</h3>
+                        <p>No problem reported. Please fill in any missing details below.</p>
                       </div>
                     </div>
                     <span className={`sutra-missing-pill ${countMissingFields(activeContact) === 0 ? "complete" : ""}`}>
-                      {countMissingFields(activeContact) === 0 ? "Profile complete ✓" : `${countMissingFields(activeContact)} missing in DB`}
+                      {countMissingFields(activeContact) === 0 ? "All Details Complete ✓" : `${countMissingFields(activeContact)} details needed`}
                     </span>
                   </div>
                 </>
@@ -1945,71 +1961,67 @@ export default function CallerDashboard() {
                 <>
                   <div className="sutra-flag-section">
                     <div className="sutra-flag-header">
-                      <span>Is this Sampark Sutra reliable? (Flag)</span>
-                      {!activeContact.flag ? <span className="badge-missing">NOT ASSESSED</span> : <span className="badge-present">IN DB: {activeContact.flag}</span>}
+                      <span>How reliable is this contact? (व्यक्ति कैसा है?)</span>
+                      {!activeContact.flag ? <span className="badge-missing">NOT CHECKED</span> : <span className="badge-present">SAVED: {activeContact.flag}</span>}
                     </div>
                     <div className="sutra-flag-pills">
                       <button type="button" className={`flag-btn ${sutraForm.flag === "Reliable" ? "active reliable" : ""}`} onClick={() => setSutraForm({ ...sutraForm, flag: sutraForm.flag === "Reliable" ? "" : "Reliable" })}>
-                        ✓ Reliable
+                        ✓ Reliable (भरोसेमंद)
                       </button>
                       <button type="button" className={`flag-btn ${sutraForm.flag === "Doubtful" ? "active doubtful" : ""}`} onClick={() => setSutraForm({ ...sutraForm, flag: sutraForm.flag === "Doubtful" ? "" : "Doubtful" })}>
-                        ? Doubtful
+                        ? Doubtful (संदेहास्पद)
                       </button>
                       <button type="button" className={`flag-btn ${sutraForm.flag === "Unreliable" ? "active unreliable" : ""}`} onClick={() => setSutraForm({ ...sutraForm, flag: sutraForm.flag === "Unreliable" ? "" : "Unreliable" })}>
-                        ✕ Unreliable
+                        ✕ Unreliable (अविश्वसनीय)
                       </button>
                       <button type="button" className={`flag-btn ${showCustomFlag || (!["Reliable", "Doubtful", "Unreliable", ""].includes(sutraForm.flag)) ? "active neutral" : ""}`} onClick={() => setShowCustomFlag(!showCustomFlag)}>
-                        ✎ Custom
+                        ✎ Custom (अन्य)
                       </button>
                     </div>
                     {(showCustomFlag || (!["Reliable", "Doubtful", "Unreliable", ""].includes(sutraForm.flag))) && (
-                      <input type="text" className="sutra-field-input" placeholder="Enter custom reliability assessment..." value={sutraForm.flag} onChange={(e) => setSutraForm({ ...sutraForm, flag: e.target.value })} />
+                      <input type="text" className="sutra-field-input" placeholder="Type custom status..." value={sutraForm.flag} onChange={(e) => setSutraForm({ ...sutraForm, flag: e.target.value })} />
                     )}
                   </div>
 
                   <div className="sutra-section-title">
-                    <span>Profile details</span>
-                    <small>Fill in unfilled fields to push directly to database</small>
+                    <span>Contact Details (व्यक्ति की जानकारी)</span>
+                    <small>Fill empty fields to save to records</small>
                   </div>
 
                   <div className="sutra-fields-grid">
                     <div className="sutra-field-box">
-                      <div className="sutra-field-label-row"><span>Father's Name</span>{!activeContact.fathers_name ? <span className="badge-missing">MISSING IN DB</span> : <span className="badge-present">SAVED</span>}</div>
-                      <input type="text" className={`sutra-field-input ${!activeContact.fathers_name ? "input-missing" : ""}`} placeholder="e.g. Shri Ramesh Singh" value={sutraForm.fathers_name} onChange={(e) => setSutraForm({ ...sutraForm, fathers_name: e.target.value })} />
+                      <div className="sutra-field-label-row"><span>Father's Name (पिता का नाम)</span>{!activeContact.fathers_name ? <span className="badge-missing">NOT FILLED</span> : <span className="badge-present">SAVED</span>}</div>
+                      <input type="text" className={`sutra-field-input ${!activeContact.fathers_name ? "input-missing" : ""}`} placeholder="e.g. Ramesh Singh" value={sutraForm.fathers_name} onChange={(e) => setSutraForm({ ...sutraForm, fathers_name: e.target.value })} />
                     </div>
                     <div className="sutra-field-box">
-                      <div className="sutra-field-label-row"><span>Age (Years)</span>{activeContact.age == null ? <span className="badge-missing">MISSING IN DB</span> : <span className="badge-present">SAVED</span>}</div>
+                      <div className="sutra-field-label-row"><span>Age in Years (उम्र)</span>{activeContact.age == null ? <span className="badge-missing">NOT FILLED</span> : <span className="badge-present">SAVED</span>}</div>
                       <input type="number" min="18" max="120" className={`sutra-field-input ${activeContact.age == null ? "input-missing" : ""}`} placeholder="e.g. 38" value={sutraForm.age} onChange={(e) => setSutraForm({ ...sutraForm, age: e.target.value })} />
                     </div>
                     <div className="sutra-field-box">
-                      <div className="sutra-field-label-row"><span>Caste / Community</span>{!activeContact.caste ? <span className="badge-missing">MISSING IN DB</span> : <span className="badge-present">SAVED</span>}</div>
-                      <input type="text" className={`sutra-field-input ${!activeContact.caste ? "input-missing" : ""}`} placeholder="e.g. Yadav, Brahmin, Jat, Maurya..." value={sutraForm.caste} onChange={(e) => setSutraForm({ ...sutraForm, caste: e.target.value })} />
-                    </div>
-                    <div className="sutra-field-box">
-                      <div className="sutra-field-label-row"><span>Voter ID (EPIC ID)</span>{!activeContact.epic_id ? <span className="badge-missing">MISSING IN DB</span> : <span className="badge-present">SAVED</span>}</div>
+                      <div className="sutra-field-label-row"><span>Voter ID Card No (वोटर कार्ड नंबर)</span>{!activeContact.epic_id ? <span className="badge-missing">NOT FILLED</span> : <span className="badge-present">SAVED</span>}</div>
                       <input type="text" className={`sutra-field-input ${!activeContact.epic_id ? "input-missing" : ""}`} placeholder="e.g. WDF1234567" value={sutraForm.epic_id} onChange={(e) => setSutraForm({ ...sutraForm, epic_id: e.target.value })} />
                     </div>
-                    <div className="sutra-field-box" style={{ gridColumn: "1 / -1" }}>
-                      <div className="sutra-field-label-row"><span>Social Media / WhatsApp</span>{!activeContact.social_media ? <span className="badge-missing">MISSING IN DB</span> : <span className="badge-present">SAVED</span>}</div>
-                      <input type="text" className={`sutra-field-input ${!activeContact.social_media ? "input-missing" : ""}`} placeholder="WhatsApp number, Facebook profile, or handle" value={sutraForm.social_media} onChange={(e) => setSutraForm({ ...sutraForm, social_media: e.target.value })} />
+                    <div className="sutra-field-box">
+                      <div className="sutra-field-label-row"><span>WhatsApp / Mobile (व्हाट्सएप नंबर)</span>{!activeContact.social_media ? <span className="badge-missing">NOT FILLED</span> : <span className="badge-present">SAVED</span>}</div>
+                      <input type="text" className={`sutra-field-input ${!activeContact.social_media ? "input-missing" : ""}`} placeholder="WhatsApp number or Facebook" value={sutraForm.social_media} onChange={(e) => setSutraForm({ ...sutraForm, social_media: e.target.value })} />
                     </div>
                   </div>
 
                   {!call.has_problem && (
                     <>
                       <button type="button" className="sutra-existing-toggle" onClick={() => setShowPrimaryDetails(!showPrimaryDetails)}>
-                        <span>✎ Modify primary details (Name & Phone)</span>
+                        <span>✎ Edit Name or Phone (नाम या फ़ोन बदलें)</span>
                         <span>{showPrimaryDetails ? "▴ Hide" : "▾ Show"}</span>
                       </button>
 
                       {showPrimaryDetails && (
                         <div className="sutra-fields-grid">
                           <div className="sutra-field-box">
-                            <div className="sutra-field-label-row"><span>Contact Name</span><span className="badge-present">IN DB</span></div>
+                            <div className="sutra-field-label-row"><span>Full Name (पूरा नाम)</span><span className="badge-present">SAVED</span></div>
                             <input type="text" className="sutra-field-input" value={sutraForm.name} onChange={(e) => setSutraForm({ ...sutraForm, name: e.target.value })} required />
                           </div>
                           <div className="sutra-field-box">
-                            <div className="sutra-field-label-row"><span>Phone Number</span><span className="badge-present">IN DB</span></div>
+                            <div className="sutra-field-label-row"><span>Phone Number (फ़ोन नंबर)</span><span className="badge-present">SAVED</span></div>
                             <input type="text" className="sutra-field-input" value={sutraForm.phone} onChange={(e) => setSutraForm({ ...sutraForm, phone: e.target.value })} required />
                           </div>
                         </div>
@@ -2018,14 +2030,14 @@ export default function CallerDashboard() {
                       <div className="sutra-db-sync-row">
                         <label className="sutra-sync-label">
                           <input type="checkbox" checked={updateSutra} onChange={(e) => setUpdateSutra(e.target.checked)} />
-                          <span>Push unfilled values and updates to database</span>
+                          <span>Save newly filled details to profile</span>
                         </label>
                         <button type="button" className="sutra-quick-update-btn" disabled={busy} onClick={directUpdateSutra}>
-                          Update in DB now ↗
+                          Save Profile Now ↗
                         </button>
                       </div>
 
-                      <label>Conversation remarks <em>Optional</em><textarea rows="2" placeholder="Any specific remarks from the conversation…" value={call.feedback} onChange={(e) => setCall({ ...call, feedback: e.target.value })} /></label>
+                      <label>Call Remarks / Notes (बातचीत की मुख्य बातें) <em>Optional</em><textarea rows="2" placeholder="Any points from your conversation..." value={call.feedback} onChange={(e) => setCall({ ...call, feedback: e.target.value })} /></label>
                     </>
                   )}
                 </>
@@ -2035,7 +2047,7 @@ export default function CallerDashboard() {
               <div className="caller-form-actions">
                 <button type="button" className="caller-cancel" onClick={() => setActiveContact(null)}>Cancel</button>
                 <button className="caller-primary" disabled={busy}>
-                  {busy ? "Saving…" : (!call.has_problem ? "Save call & update profile" : "Save call details")}
+                  {busy ? "Saving…" : (!call.has_problem ? "Save Call & Info" : "Save Call Details")}
                   <span>→</span>
                 </button>
               </div>
@@ -2050,8 +2062,8 @@ export default function CallerDashboard() {
           <section className="caller-modal" role="dialog" aria-modal="true" style={{ width: "min(100%, 640px)" }}>
             <header className="caller-modal-header">
               <div>
-                <div className="caller-kicker">NEW CONTACT REGISTRATION</div>
-                <h2>Add Sampark Sutra</h2>
+                <div className="caller-kicker">NEW CONTACT</div>
+                <h2>Add New Contact (नया संपर्क जोड़ें)</h2>
               </div>
               <button className="modal-close" onClick={() => setShowAddModal(false)}>×</button>
             </header>
@@ -2059,7 +2071,7 @@ export default function CallerDashboard() {
             <form onSubmit={handleCreateContact} className="caller-call-form" style={{ marginTop: "12px" }}>
               <div className="sutra-fields-grid">
                 <div className="sutra-field-box">
-                  <div className="sutra-field-label-row"><span>Full Name <em>Required</em></span></div>
+                  <div className="sutra-field-label-row"><span>Full Name (पूरा नाम) <em>Required *</em></span></div>
                   <input
                     type="text"
                     className="sutra-field-input"
@@ -2071,7 +2083,7 @@ export default function CallerDashboard() {
                 </div>
 
                 <div className="sutra-field-box">
-                  <div className="sutra-field-label-row"><span>Phone Number <em>Required</em></span></div>
+                  <div className="sutra-field-label-row"><span>Mobile Number (मोबाइल नंबर) <em>Required *</em></span></div>
                   <input
                     type="tel"
                     className="sutra-field-input"
@@ -2085,14 +2097,14 @@ export default function CallerDashboard() {
                 </div>
 
                 <div className="sutra-field-box">
-                  <div className="sutra-field-label-row"><span>Assembly Constituency <em>Required</em></span></div>
+                  <div className="sutra-field-label-row"><span>Assembly (विधानसभा) <em>Required *</em></span></div>
                   <select
                     className="sutra-field-input"
                     value={newContact.ac_no}
                     onChange={(e) => setNewContact({ ...newContact, ac_no: e.target.value, village_id: "" })}
                     required
                   >
-                    <option value="">Select Assembly</option>
+                    <option value="">-- Select Assembly --</option>
                     {assemblies.map((a) => (
                       <option key={a.ac_no} value={a.ac_no}>{a.name}</option>
                     ))}
@@ -2100,7 +2112,7 @@ export default function CallerDashboard() {
                 </div>
 
                 <div className="sutra-field-box">
-                  <div className="sutra-field-label-row"><span>Village <em>Required</em></span></div>
+                  <div className="sutra-field-label-row"><span>Village / Town (गाँव / कस्बा) <em>Required *</em></span></div>
                   <select
                     className="sutra-field-input"
                     value={newContact.village_id}
@@ -2108,7 +2120,7 @@ export default function CallerDashboard() {
                     onChange={(e) => setNewContact({ ...newContact, village_id: e.target.value })}
                     required
                   >
-                    <option value="">{newContact.ac_no ? "Select Village" : "Select Assembly first"}</option>
+                    <option value="">{newContact.ac_no ? "-- Select Village --" : "Select Assembly first"}</option>
                     {(addModalVillages.length ? addModalVillages : villages).map((v) => (
                       <option key={v.village_id} value={v.village_id}>{v.name}</option>
                     ))}
@@ -2116,18 +2128,18 @@ export default function CallerDashboard() {
                 </div>
 
                 <div className="sutra-field-box">
-                  <div className="sutra-field-label-row"><span>Father's Name</span></div>
+                  <div className="sutra-field-label-row"><span>Father's Name (पिता का नाम)</span></div>
                   <input
                     type="text"
                     className="sutra-field-input"
-                    placeholder="e.g. Shri Sohan Lal"
+                    placeholder="e.g. Sohan Lal"
                     value={newContact.fathers_name}
                     onChange={(e) => setNewContact({ ...newContact, fathers_name: e.target.value })}
                   />
                 </div>
 
                 <div className="sutra-field-box">
-                  <div className="sutra-field-label-row"><span>Age (Years)</span></div>
+                  <div className="sutra-field-label-row"><span>Age in Years (उम्र)</span></div>
                   <input
                     type="number"
                     min="18"
@@ -2140,18 +2152,7 @@ export default function CallerDashboard() {
                 </div>
 
                 <div className="sutra-field-box">
-                  <div className="sutra-field-label-row"><span>Caste / Community</span></div>
-                  <input
-                    type="text"
-                    className="sutra-field-input"
-                    placeholder="e.g. Yadav, Brahmin, Jat..."
-                    value={newContact.caste}
-                    onChange={(e) => setNewContact({ ...newContact, caste: e.target.value })}
-                  />
-                </div>
-
-                <div className="sutra-field-box">
-                  <div className="sutra-field-label-row"><span>Voter ID (EPIC ID)</span></div>
+                  <div className="sutra-field-label-row"><span>Voter ID Card No (वोटर कार्ड नंबर)</span></div>
                   <input
                     type="text"
                     className="sutra-field-input"
@@ -2161,12 +2162,12 @@ export default function CallerDashboard() {
                   />
                 </div>
 
-                <div className="sutra-field-box" style={{ gridColumn: "1 / -1" }}>
-                  <div className="sutra-field-label-row"><span>Social Media / WhatsApp</span></div>
+                <div className="sutra-field-box">
+                  <div className="sutra-field-label-row"><span>WhatsApp / Social Media (व्हाट्सएप)</span></div>
                   <input
                     type="text"
                     className="sutra-field-input"
-                    placeholder="WhatsApp number, Facebook profile, or handle"
+                    placeholder="WhatsApp number or handle"
                     value={newContact.social_media}
                     onChange={(e) => setNewContact({ ...newContact, social_media: e.target.value })}
                   />
@@ -2175,7 +2176,7 @@ export default function CallerDashboard() {
 
               <div className="sutra-flag-section">
                 <div className="sutra-flag-header">
-                  <span>Reliability Assessment (Flag)</span>
+                  <span>How reliable is this contact? (व्यक्ति कैसा है?)</span>
                 </div>
                 <div className="sutra-flag-pills">
                   {["Reliable", "Doubtful", "Unreliable"].map((fl) => (
@@ -2185,7 +2186,7 @@ export default function CallerDashboard() {
                       className={`flag-btn ${newContact.flag === fl ? `active ${fl.toLowerCase()}` : ""}`}
                       onClick={() => setNewContact({ ...newContact, flag: newContact.flag === fl ? "" : fl })}
                     >
-                      {fl === "Reliable" ? "✓ Reliable" : fl === "Doubtful" ? "? Doubtful" : "✕ Unreliable"}
+                      {fl === "Reliable" ? "✓ Reliable (भरोसेमंद)" : fl === "Doubtful" ? "? Doubtful (संदेहास्पद)" : "✕ Unreliable (अविश्वसनीय)"}
                     </button>
                   ))}
                   <button
@@ -2193,7 +2194,7 @@ export default function CallerDashboard() {
                     className={`flag-btn ${!["Reliable", "Doubtful", "Unreliable", ""].includes(newContact.flag) ? "active neutral" : ""}`}
                     onClick={() => { if (["Reliable", "Doubtful", "Unreliable"].includes(newContact.flag)) setNewContact({ ...newContact, flag: "Neutral" }); }}
                   >
-                    ✎ Custom
+                    ✎ Custom (अन्य)
                   </button>
                 </div>
               </div>
@@ -2203,7 +2204,7 @@ export default function CallerDashboard() {
               <div className="caller-form-actions">
                 <button type="button" className="caller-cancel" onClick={() => setShowAddModal(false)}>Cancel</button>
                 <button className="caller-primary" disabled={busy}>
-                  {busy ? "Adding contact…" : "Add to Roster"}
+                  {busy ? "Saving…" : "Save Contact"}
                   <span>→</span>
                 </button>
               </div>
@@ -2218,8 +2219,8 @@ export default function CallerDashboard() {
           <section className="caller-modal" role="dialog" aria-modal="true" style={{ width: "min(100%, 480px)" }}>
             <header className="caller-modal-header">
               <div>
-                <div className="caller-kicker" style={{ color: "#c53434" }}>ROSTER REMOVAL</div>
-                <h2>Remove Sampark Sutra</h2>
+                <div className="caller-kicker" style={{ color: "#c53434" }}>DELETE CONTACT</div>
+                <h2>Remove Contact (संपर्क हटाएं)</h2>
               </div>
               <button className="modal-close" onClick={() => setContactToDelete(null)}>×</button>
             </header>
@@ -2227,19 +2228,16 @@ export default function CallerDashboard() {
             <div className="delete-confirm-box">
               <strong>Are you sure you want to remove this contact?</strong>
               <p style={{ margin: "4px 0 0" }}>
-                <b>{contactToDelete.name}</b> ({contactToDelete.phone}) from {contactToDelete.village_name || "Village"} ({contactToDelete.ac_name || "AC"}).
-              </p>
-              <p style={{ margin: "6px 0 0", fontSize: "10px", color: "#923737" }}>
-                This removal will be recorded in the campaign audit trail with your username and timestamp.
+                <b>{contactToDelete.name}</b> ({contactToDelete.phone}) from {contactToDelete.village_name || "Village"} ({contactToDelete.ac_name || "Assembly"}).
               </p>
             </div>
 
             <label style={{ fontSize: "10.5px", fontWeight: "650", color: "#3e5264", display: "flex", flexDirection: "column", gap: "6px" }}>
-              Reason for removal <em>Optional</em>
+              Reason for removing (हटाने का कारण) <em>Optional</em>
               <input
                 type="text"
                 className="sutra-field-input"
-                placeholder="e.g. Relocated / Wrong number / Inactive"
+                placeholder="e.g. Wrong number / Number not working / Shifted"
                 value={deleteReason}
                 onChange={(e) => setDeleteReason(e.target.value)}
               />
@@ -2250,7 +2248,7 @@ export default function CallerDashboard() {
             <div className="caller-form-actions" style={{ marginTop: "16px" }}>
               <button type="button" className="caller-cancel" onClick={() => setContactToDelete(null)}>Cancel</button>
               <button className="caller-danger-btn" disabled={busy} onClick={handleDeleteContact}>
-                {busy ? "Removing…" : "Confirm Removal"}
+                {busy ? "Removing…" : "Yes, Remove Contact"}
               </button>
             </div>
           </section>
