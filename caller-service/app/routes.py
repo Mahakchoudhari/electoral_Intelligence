@@ -27,9 +27,10 @@ class LoginIn(BaseModel):
     password: str = Field(min_length=1, max_length=200)
 
 
-# class SignupIn(BaseModel):
-#     username: str = Field(min_length=3, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$")
-#     password: str = Field(min_length=8, max_length=200)
+class CreateUserIn(BaseModel):
+    username: str = Field(min_length=3, max_length=100, pattern=r"^[A-Za-z0-9_.-]+$")
+    password: str = Field(min_length=4, max_length=200)
+    role: str = Field(default="caller", pattern=r"^(caller|admin)$")
 
 
 class SamparkSutraUpdate(BaseModel):
@@ -1103,3 +1104,39 @@ async def export_admin_report(
         media_type="text/csv; charset=utf-8",
         headers={"Content-Disposition": f'attachment; filename="{filename}"'},
     )
+
+
+@router.post("/admin/users", status_code=201)
+async def create_user(
+    payload: CreateUserIn,
+    request: Request,
+    _: dict[str, Any] = Depends(require_admin),
+) -> dict[str, Any]:
+    pool = get_pool(request)
+    username = payload.username.strip().lower()
+    exists = await pool.fetchval(
+        "SELECT EXISTS (SELECT 1 FROM call_centre_user WHERE lower(username) = $1)",
+        username,
+    )
+    if exists:
+        raise HTTPException(status_code=409, detail=f"Username '{username}' already exists")
+
+    salt = secrets.token_bytes(16)
+    password_hash = hash_password(payload.password, salt)
+    role = payload.role if payload.role in ("caller", "admin") else "caller"
+    try:
+        row = await pool.fetchrow(
+            """INSERT INTO call_centre_user (username, hashed_password, salt, role)
+               VALUES ($1, $2, $3, $4)
+               RETURNING pid, username, role""",
+            username, password_hash, salt.hex(), role,
+        )
+    except asyncpg.UniqueViolationError as exc:
+        raise HTTPException(status_code=409, detail=f"Username '{username}' already exists") from exc
+
+    return {
+        "pid": row["pid"],
+        "username": row["username"],
+        "role": row["role"],
+        "message": f"User '{row['username']}' created successfully as {row['role']}",
+    }

@@ -174,6 +174,10 @@ export default function CallerDashboard() {
   const [adminAssemblies, setAdminAssemblies] = useState([]);
   const [adminExporting, setAdminExporting] = useState(false);
   const [adminNotice, setAdminNotice] = useState("");
+  const [showCreateUserModal, setShowCreateUserModal] = useState(false);
+  const [newUserData, setNewUserData] = useState({ username: "", password: "", role: "caller" });
+  const [createUserError, setCreateUserError] = useState("");
+  const [createUserLoading, setCreateUserLoading] = useState(false);
 
   const signOut = useCallback(() => {
     sessionStorage.removeItem("caller-token");
@@ -612,6 +616,27 @@ export default function CallerDashboard() {
       setTimeout(() => setAdminNotice(""), 5000);
     };
 
+    const handleCreateUser = async (e) => {
+      e.preventDefault();
+      setCreateUserLoading(true);
+      setCreateUserError("");
+      try {
+        const res = await request("/api/caller/admin/users", token, {
+          method: "POST",
+          body: JSON.stringify(newUserData),
+        });
+        setAdminNotice(`Created new user ID: "${res.username}" (${res.role})`);
+        setShowCreateUserModal(false);
+        setNewUserData({ username: "", password: "", role: "caller" });
+        loadAdminActivity(false);
+        setTimeout(() => setAdminNotice(""), 6000);
+      } catch (err) {
+        setCreateUserError(err.message);
+      } finally {
+        setCreateUserLoading(false);
+      }
+    };
+
     const resetAdminFilters = () => {
       setDateFrom(localDate(-13));
       setDateTo(localDate(0));
@@ -636,6 +661,14 @@ export default function CallerDashboard() {
             <span>Electoral Intelligence<small>ADMIN CONSOLE</small></span>
           </a>
           <div className="caller-header-right">
+            <button
+              onClick={() => { setShowCreateUserModal(true); setCreateUserError(""); }}
+              className="admin-action-btn-primary"
+              title="Create a new caller or admin ID"
+              style={{ background: "#2563eb", borderColor: "#2563eb" }}
+            >
+              <span>+</span> Add New User
+            </button>
             <button
               onClick={() => handleDownloadReport()}
               className="admin-action-btn-primary"
@@ -1125,7 +1158,16 @@ export default function CallerDashboard() {
                   <div className="caller-kicker">CALLER DIRECTORY & LEADERBOARD</div>
                   <h2>Caller Performance & Activity</h2>
                 </div>
-                <span>{(adminActivity.caller_stats || []).length} callers active in this period</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span>{(adminActivity.caller_stats || []).length} callers active in this period</span>
+                  <button
+                    type="button"
+                    onClick={() => { setShowCreateUserModal(true); setCreateUserError(""); }}
+                    className="caller-action-btn primary"
+                  >
+                    + Add New User
+                  </button>
+                </div>
               </div>
 
               {(adminActivity.caller_stats || []).length ? (
@@ -1650,6 +1692,79 @@ export default function CallerDashboard() {
             <div className="caller-form-actions" style={{ marginTop: "14px" }}>
               <button type="button" className="caller-cancel" onClick={() => setShowAuditModal(false)}>Close</button>
             </div>
+          </section>
+        </div>
+      )}
+
+      {/* Admin Add New User Modal */}
+      {showCreateUserModal && (
+        <div className="caller-modal-scrim" role="presentation" onMouseDown={(e) => { if (e.target === e.currentTarget) setShowCreateUserModal(false); }}>
+          <section className="caller-modal" role="dialog" aria-modal="true" style={{ width: "min(100%, 460px)" }}>
+            <header className="caller-modal-header">
+              <div>
+                <div className="caller-kicker">USER MANAGEMENT <span>•</span> ACCESS CONTROL</div>
+                <h2>Create New Account</h2>
+              </div>
+              <button className="modal-close" onClick={() => setShowCreateUserModal(false)}>×</button>
+            </header>
+
+            <form onSubmit={handleCreateUser} className="caller-call-form" style={{ marginTop: "14px" }}>
+              <label>
+                Username <em>Required (Letters, numbers, . _ -)</em>
+                <input
+                  type="text"
+                  autoComplete="off"
+                  minLength={3}
+                  maxLength={100}
+                  pattern="[A-Za-z0-9_.-]+"
+                  placeholder="e.g. caller_meerut_1"
+                  value={newUserData.username}
+                  onChange={(e) => setNewUserData({ ...newUserData, username: e.target.value })}
+                  required
+                />
+              </label>
+
+              <label>
+                Password <em>Required (minimum 4 characters)</em>
+                <input
+                  type="password"
+                  autoComplete="new-password"
+                  minLength={4}
+                  placeholder="••••••••"
+                  value={newUserData.password}
+                  onChange={(e) => setNewUserData({ ...newUserData, password: e.target.value })}
+                  required
+                />
+              </label>
+
+              <label>
+                Account Role <em>Required</em>
+                <select
+                  value={newUserData.role}
+                  onChange={(e) => setNewUserData({ ...newUserData, role: e.target.value })}
+                  required
+                >
+                  <option value="caller">Caller (Field caller / call center operator)</option>
+                  <option value="admin">Administrator (Full supervisor & reporting access)</option>
+                </select>
+              </label>
+
+              {createUserError && (
+                <div className="caller-error" role="alert" style={{ marginTop: "4px" }}>
+                  {createUserError}
+                </div>
+              )}
+
+              <div className="caller-form-actions" style={{ marginTop: "12px" }}>
+                <button type="button" className="caller-cancel" onClick={() => setShowCreateUserModal(false)}>
+                  Cancel
+                </button>
+                <button className="caller-primary" disabled={createUserLoading} style={{ minWidth: "120px" }}>
+                  {createUserLoading ? "Creating…" : "Create User"}
+                  <span>→</span>
+                </button>
+              </div>
+            </form>
           </section>
         </div>
       )}
