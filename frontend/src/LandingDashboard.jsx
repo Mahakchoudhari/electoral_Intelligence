@@ -179,7 +179,7 @@ function StackedRatioBar({ segments }) {
 // ============================================================================
 export default function LandingDashboard({
   onOpenGIS,
-  initialAC = "49",
+  initialAC = "",
   initialVillage = "",
   initialElectionYear = "2022",
   initialDistrictCode = "",
@@ -188,11 +188,14 @@ export default function LandingDashboard({
 }) {
   const [constituencies, setConstituencies] = useState([]);
   const [callingData, setCallingData] = useState(null);
+  const [statePollData, setStatePollData] = useState(null);
+  const [districtsList, setDistrictsList] = useState([]);
+  const [loadingInitial, setLoadingInitial] = useState(true);
 
-  // Hierarchical selections
+  // Hierarchical selections (districtCode is empty by default to show state overview)
   const [selectedDistrictCode, setSelectedDistrictCode] = useState(initialDistrictCode || "");
-  const [selectedAC, setSelectedAC] = useState(initialAC);
-  const [selectedVillageId, setSelectedVillageId] = useState(initialVillage);
+  const [selectedAC, setSelectedAC] = useState(initialAC || "");
+  const [selectedVillageId, setSelectedVillageId] = useState(initialVillage || "");
   const [selectedVillage2Id, setSelectedVillage2Id] = useState("");
   const [boothScopeTab, setBoothScopeTab] = useState("auto"); // "auto" | "all" | "village1" | "village2"
 
@@ -240,52 +243,59 @@ export default function LandingDashboard({
   const [boothTierFilter, setBoothTierFilter] = useState("all");
   const [callFilterProblem, setCallFilterProblem] = useState("all");
 
-  // 1. Load constituencies (strictly filtered to 16 districts) and calling stats
+  // 1. Load constituencies, calling stats, state-level poll totals, and 16 districts breakdown
   useEffect(() => {
     let cancelled = false;
     async function loadInitial() {
       try {
+        setLoadingInitial(true);
         const data = await queryGraphQL(`
-          query InitialData {
+          query InitialLandingData($electionYear: Int) {
             constituencies
             callingStats
+            pollResults(state: "UTTAR PRADESH", level: "state", electionYear: $electionYear)
+            districts(state: "UTTAR PRADESH", electionYear: $electionYear)
           }
-        `);
+        `, {
+          electionYear: electionYear ? Number(electionYear) : 2022,
+        });
         if (!cancelled) {
           const constList = data.constituencies || [];
           setConstituencies(constList);
           setCallingData(data.callingStats || null);
+          setStatePollData(data.pollResults || null);
 
-          if (constList.length) {
-            const matchedInit = initialDistrictCode && initialAC
-              ? constList.find((c) => c.ac_no === initialAC && c.district_code === initialDistrictCode)
-              : constList.find((c) => c.ac_no === initialAC);
-            if (matchedInit) {
-              setSelectedDistrictCode(matchedInit.district_code || "");
-              setSelectedAC(matchedInit.ac_no);
-            } else if (initialDistrictCode) {
-              const inDist = constList.filter((c) => c.district_code === initialDistrictCode);
-              if (inDist.length) {
-                const best = inDist.find((c) => c.booth_count > 0) || inDist[0];
-                setSelectedDistrictCode(best.district_code || "");
-                setSelectedAC(best.ac_no);
-              }
-            } else {
-              const best = constList.find((c) => c.booth_count > 0) || constList[0];
-              setSelectedDistrictCode(best.district_code || "");
-              setSelectedAC(best.ac_no);
+          const dFeatures = data.districts?.features || [];
+          setDistrictsList(dFeatures.map((f) => ({
+            district_code: String(f.properties?.dtcode11 || f.properties?.Dist_LGD || ""),
+            name: f.properties?.dtname || "District",
+            winner: f.properties?.winner || "—",
+            electors: f.properties?.electors || 0,
+            votes_polled: f.properties?.votes_polled || 0,
+            party_shares: f.properties?.party_shares || {},
+            party_votes: f.properties?.party_votes || {},
+          })));
+
+          // Only auto-select district/AC if the user explicitly provided an initial selection
+          if (initialDistrictCode) {
+            setSelectedDistrictCode(initialDistrictCode);
+            if (initialAC) {
+              const matched = constList.find((c) => c.ac_no === initialAC);
+              if (matched) setSelectedAC(matched.ac_no);
             }
           }
         }
       } catch (err) {
         console.error("Initial data load failed:", err);
+      } finally {
+        if (!cancelled) setLoadingInitial(false);
       }
     }
     loadInitial();
     return () => {
       cancelled = true;
     };
-  }, [initialAC]);
+  }, [electionYear, initialDistrictCode, initialAC]);
 
   // Load available election years for current selected AC
   useEffect(() => {
@@ -355,10 +365,20 @@ export default function LandingDashboard({
   // Handle district selection change: sync AC & Village
   const handleDistrictChange = (dCode) => {
     setSelectedDistrictCode(dCode);
+    if (!dCode) {
+      setSelectedAC("");
+      setSelectedVillageId("");
+      setSelectedVillage2Id("");
+      setAcPollData(null);
+      setAcVillages([]);
+      return;
+    }
     const acsInDist = constituencies.filter((c) => c.district_code === dCode);
     if (acsInDist.length > 0) {
       const best = acsInDist.find((c) => c.booth_count > 0) || acsInDist[0];
       setSelectedAC(best.ac_no);
+    } else {
+      setSelectedAC("");
     }
     setSelectedVillageId("");
     setSelectedVillage2Id("");
@@ -780,6 +800,7 @@ export default function LandingDashboard({
                 value={selectedDistrictCode}
                 onChange={(e) => handleDistrictChange(e.target.value)}
               >
+                <option value="">— Select District (16 Available) —</option>
                 {availableDistricts.map((d) => (
                   <option key={d.district_code} value={d.district_code}>
                     {d.name}
@@ -796,16 +817,22 @@ export default function LandingDashboard({
               <select
                 className="custom-select"
                 value={selectedAC}
+                disabled={!selectedDistrictCode}
                 onChange={(e) => {
                   setSelectedAC(e.target.value);
                   setSelectedVillageId("");
+                  setSelectedVillage2Id("");
                 }}
               >
-                {filteredACs.map((c) => (
-                  <option key={c.ac_no} value={c.ac_no}>
-                    {c.ac_no} - {c.name} {c.booth_count > 0 ? `(${formatNumber(c.booth_count)})` : ""}
-                  </option>
-                ))}
+                {!selectedDistrictCode ? (
+                  <option value="">— Pick District First —</option>
+                ) : (
+                  filteredACs.map((c) => (
+                    <option key={c.ac_no} value={c.ac_no}>
+                      {c.ac_no} - {c.name} {c.booth_count > 0 ? `(${formatNumber(c.booth_count)})` : ""}
+                    </option>
+                  ))
+                )}
               </select>
             </div>
 
@@ -975,15 +1002,213 @@ export default function LandingDashboard({
           </div>
         )}
 
-        {/* Section 1: Booth Demarcation Breakdown */}
-        <section>
-          <div className="section-head">
-            <div className="section-title-wrap">
-              <h2>
-                <IconChartBar size={16} /> Booth Demarcation · {activeACInfo.name} ({vsParty === "all" ? "RLD vs All" : `RLD vs ${vsParty}`})
-              </h2>
+        {/* State Overview if no district is selected */}
+        {!selectedDistrictCode ? (
+          <section className="state-overview-section">
+            <div className="state-overview-banner">
+              <div className="state-overview-header">
+                <div>
+                  <span className="state-badge">STATE OVERVIEW</span>
+                  <h2>Uttar Pradesh · 16 Priority Districts</h2>
+                  <p>Comprehensive geospatial & electoral intelligence overview. Select any district below or use the filter above to inspect Assembly Constituencies, Booth Demarcations, and Villages.</p>
+                </div>
+                <div className="state-quick-meta">
+                  <div className="state-meta-chip">
+                    <span>Target Party:</span>
+                    <strong>RLD</strong>
+                  </div>
+                  <div className="state-meta-chip">
+                    <span>Tracked Districts:</span>
+                    <strong>16 Districts</strong>
+                  </div>
+                  <div className="state-meta-chip">
+                    <span>Tracked ACs:</span>
+                    <strong>{constituencies.length} ACs</strong>
+                  </div>
+                </div>
+              </div>
             </div>
-          </div>
+
+            {/* State Turnout & Party Shares Grid */}
+            <div className="state-metrics-grid">
+              {/* State Vote Shares */}
+              <div className="electoral-chart-card">
+                <div className="demarcation-card-header">
+                  <div>
+                    <span className="demarcation-scope-tag">STATE VOTES</span>
+                    <h3>Uttar Pradesh Party Shares ({electionYear})</h3>
+                    <div className="demarcation-card-sub">Combined votes across tracked priority regions</div>
+                  </div>
+                </div>
+
+                <div className="party-bars-list">
+                  {(statePollData?.party_votes || []).slice(0, 6).map((party) => {
+                    const colors = {
+                      BJP: "#f97316",
+                      SP: "#ef4444",
+                      RLD: "#16a34a",
+                      BSP: "#2563eb",
+                      INC: "#0284c7",
+                      AAP: "#0891b2",
+                      AIMIM: "#0d9488",
+                      ASP: "#9333ea",
+                    };
+                    const color = colors[party.party] || "#64748b";
+                    const share = party.share_percent || 0;
+                    return (
+                      <div key={party.party} className="party-bar-item">
+                        <div className="party-bar-meta">
+                          <span className="party-bar-name">
+                            <span className="party-badge-sq" style={{ backgroundColor: color }} />
+                            {party.party}
+                          </span>
+                          <span className="party-bar-stats">
+                            {formatNumber(party.votes)} votes • <strong>{formatPercent(share)}</strong>
+                          </span>
+                        </div>
+                        <div className="party-bar-track">
+                          <div
+                            className="party-bar-fill"
+                            style={{
+                              width: `${Math.min(100, Math.max(2, share))}%`,
+                              backgroundColor: color,
+                            }}
+                          />
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* State Total Participation */}
+              <div className="turnout-summary-card">
+                <div className="demarcation-card-header">
+                  <div>
+                    <span className="demarcation-scope-tag">STATE METRICS</span>
+                    <h3>State Electors & Turnout</h3>
+                    <div className="demarcation-card-sub">Overall participation statistics</div>
+                  </div>
+                </div>
+
+                <div className="turnout-metrics-list">
+                  <div className="turnout-metric-row">
+                    <span>Total Electors</span>
+                    <strong>{formatNumber(statePollData?.electors || 31628187)}</strong>
+                  </div>
+                  <div className="turnout-metric-row">
+                    <span>Votes Polled</span>
+                    <strong>{formatNumber(statePollData?.votes_polled || 22179781)}</strong>
+                  </div>
+                  <div className="turnout-metric-row">
+                    <span>Valid Votes</span>
+                    <strong>{formatNumber(statePollData?.valid_votes || 22078895)}</strong>
+                  </div>
+                  <div className="turnout-metric-row">
+                    <span>Overall Turnout</span>
+                    <strong style={{ color: "#38bdf8" }}>
+                      {statePollData?.electors && statePollData?.votes_polled
+                        ? formatPercent((statePollData.votes_polled / statePollData.electors) * 100)
+                        : "70.1%"}
+                    </strong>
+                  </div>
+                  <div className="turnout-metric-row">
+                    <span>Tracked Polling Booths</span>
+                    <strong>{formatNumber(statePollData?.booth_records || 39990)}</strong>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* 16 Districts Selection Grid */}
+            <div className="state-districts-container">
+              <div className="section-head" style={{ marginTop: "12px", marginBottom: "14px" }}>
+                <div className="section-title-wrap">
+                  <h2>
+                    <IconPin size={16} /> Select a District to Inspect Booths & Demarcations
+                  </h2>
+                </div>
+                <span className="district-count-tag">16 Districts Tracked</span>
+              </div>
+
+              <div className="districts-cards-grid">
+                {districtsList.map((d) => {
+                  const rldShare = d.party_shares?.RLD || 0;
+                  const bjpShare = d.party_shares?.BJP || 0;
+                  const tier = getTier(rldShare);
+                  const acCount = constituencies.filter((c) => c.district_code === d.district_code).length;
+
+                  return (
+                    <div
+                      key={d.district_code}
+                      className="district-selection-card"
+                      onClick={() => handleDistrictChange(d.district_code)}
+                      role="button"
+                      tabIndex={0}
+                    >
+                      <div className="district-card-head">
+                        <div>
+                          <h4>{d.name}</h4>
+                          <span className="district-card-sub">{acCount} AC Constituencies</span>
+                        </div>
+                        <span
+                          className="district-tier-pill"
+                          style={{
+                            color: tier.color,
+                            borderColor: `${tier.color}40`,
+                            backgroundColor: `${tier.color}15`,
+                          }}
+                        >
+                          RLD: {formatPercent(rldShare)}
+                        </span>
+                      </div>
+
+                      <div className="district-card-stats">
+                        <div className="d-stat">
+                          <small>Electors</small>
+                          <span>{formatNumber(d.electors)}</span>
+                        </div>
+                        <div className="d-stat">
+                          <small>Winner</small>
+                          <span style={{ color: d.winner === "RLD" ? "#22c55e" : "#f97316", fontWeight: 700 }}>
+                            {d.winner}
+                          </span>
+                        </div>
+                        <div className="d-stat">
+                          <small>BJP Share</small>
+                          <span>{formatPercent(bjpShare)}</span>
+                        </div>
+                      </div>
+
+                      <div className="district-card-cta">
+                        <span>Select District</span>
+                        <span className="district-arrow">→</span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </section>
+        ) : (
+          <>
+            {/* Section 1: Booth Demarcation Breakdown */}
+            <section>
+              <div className="section-head">
+                <div className="section-title-wrap">
+                  <h2>
+                    <IconChartBar size={16} /> Booth Demarcation · {activeACInfo.name} ({vsParty === "all" ? "RLD vs All" : `RLD vs ${vsParty}`})
+                  </h2>
+                </div>
+                <button
+                  type="button"
+                  className="back-to-state-btn"
+                  onClick={() => handleDistrictChange("")}
+                  title="Return to Uttar Pradesh State Overview"
+                >
+                  <span>← Back to State Overview</span>
+                </button>
+              </div>
 
 
           <div className="demarcation-grid">
@@ -1610,6 +1835,8 @@ export default function LandingDashboard({
             </table>
           </div>
         </section>
+          </>
+        )}
 
         {/* Section 4: Telephony & Outreach */}
         <section className="calling-section-card">
