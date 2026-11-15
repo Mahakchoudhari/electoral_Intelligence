@@ -14,7 +14,8 @@ import "./index.css";
 import "./ElectoralStyles.css";
 import LandingDashboard from "./LandingDashboard.jsx";
 import LoginScreen from "./LoginScreen.jsx";
-import { IconChartBar, IconShieldCheck, IconLogOut } from "./Icons.jsx";
+import { IconChartBar, IconShieldCheck, IconLogOut, IconArrowLeft } from "./Icons.jsx";
+
 
 // =========================================================
 // API & CONSTANTS
@@ -438,14 +439,23 @@ function MapController({ selectedFeature, level, dashboardOpen }) {
   return null;
 }
 
-function MapInitialBounds({ featureCollection }) {
+function MapInitialBounds({ featureCollection, hasActiveFeature = false }) {
   const map = useMap();
+  const initialFitDone = useRef(false);
 
   useEffect(() => {
     if (!featureCollection?.features?.length) return;
+    if (initialFitDone.current) return;
+    if (hasActiveFeature) {
+      initialFitDone.current = true;
+      return;
+    }
     const bounds = L.geoJSON(featureCollection).getBounds();
-    if (bounds.isValid()) map.fitBounds(bounds, { padding: [24, 24], maxZoom: 4.5 });
-  }, [featureCollection, map]);
+    if (bounds.isValid()) {
+      map.fitBounds(bounds, { padding: [24, 24], maxZoom: 4.5 });
+      initialFitDone.current = true;
+    }
+  }, [featureCollection, map, hasActiveFeature]);
 
   return null;
 }
@@ -1097,21 +1107,25 @@ export default function App() {
     return () => window.removeEventListener("popstate", handlePopState);
   }, []);
 
-  const handleOpenGIS = (acNo, villageId, year) => {
+  const handleOpenGIS = (acNo, villageId, year, districtCode) => {
     setActiveView("gis");
     try {
       const searchParams = new URLSearchParams(window.location.search);
       if (acNo) searchParams.set("ac", acNo);
       if (villageId) searchParams.set("village", villageId);
       if (year) searchParams.set("year", year);
+      if (districtCode) searchParams.set("district", districtCode);
       const searchStr = searchParams.toString() ? `?${searchParams.toString()}` : "";
       window.history.pushState({}, "", `/gis${searchStr}`);
     } catch {}
     if (year) {
       setSelectedElectionYear(Number(year));
     }
+    if (!selectedState) setSelectedState("UTTAR PRADESH");
+    if (districtCode) {
+      setSelectedDistrictCode(String(districtCode));
+    }
     if (acNo) {
-      if (!selectedState) setSelectedState("UTTAR PRADESH");
       setSelectedAssemblyNumber(String(acNo));
     }
     if (villageId) {
@@ -1119,6 +1133,8 @@ export default function App() {
       setMapLevel("village");
     } else if (acNo) {
       setMapLevel("assembly");
+    } else if (districtCode) {
+      setMapLevel("district");
     }
   };
 
@@ -1406,6 +1422,41 @@ export default function App() {
       }
     }
   }, [villages, selectedVillage]);
+
+  // Keep selectedAssemblyFeature in sync when assemblies data loads or selectedAssemblyNumber changes
+  useEffect(() => {
+    if (selectedAssemblyNumber && assemblies?.features) {
+      const targetAc = String(selectedAssemblyNumber).trim();
+      const updatedFeature = assemblies.features.find((f) => {
+        const acNo = String(getAssemblyNumber(f) || "").trim();
+        return acNo === targetAc;
+      });
+      if (updatedFeature) {
+        setSelectedAssemblyFeature(updatedFeature);
+        const acName = getAssemblyName(updatedFeature);
+        if (acName) setSelectedAssembly(acName);
+        if (!selectedVillage) {
+          setMapLevel("assembly");
+        }
+      }
+    }
+  }, [assemblies, selectedAssemblyNumber, selectedVillage]);
+
+  // Keep selectedDistrictFeature in sync when districts data loads or selectedDistrictCode changes
+  useEffect(() => {
+    if (selectedDistrictCode && districts?.features) {
+      const targetDistCode = normalizeCode(selectedDistrictCode);
+      const updatedFeature = districts.features.find((f) => {
+        const dCode = normalizeCode(getDistrictCode(f));
+        return dCode === targetDistCode;
+      });
+      if (updatedFeature) {
+        setSelectedDistrictFeature(updatedFeature);
+        const distName = getDistrictName(updatedFeature);
+        if (distName && !selectedDistrict) setSelectedDistrict(distName);
+      }
+    }
+  }, [districts, selectedDistrictCode, selectedDistrict]);
 
   const stateOptions = useMemo(() => {
     if (!states?.features) return [];
@@ -1792,6 +1843,7 @@ export default function App() {
         initialAC={selectedAssemblyNumber || "49"}
         initialVillage={selectedVillage || ""}
         initialElectionYear={selectedElectionYear ? String(selectedElectionYear) : "2022"}
+        initialDistrictCode={selectedDistrictCode || ""}
         authAdmin={authAdmin}
         onLogout={handleAdminLogout}
       />
@@ -1905,7 +1957,11 @@ export default function App() {
             onClick={handleOpenLanding}
             title="Return to Analytics Landing Page (Full Graphs, No Map)"
           >
-            <IconChartBar size={14} /> Landing Page
+            <IconArrowLeft size={14} />
+            <span>Landing Page</span>
+            {selectedAssembly && (
+              <span className="analytics-nav-ac-badge">AC {selectedAssemblyNumber}</span>
+            )}
           </button>
           <button className="reset-button" onClick={resetMap}>
             <span>↻</span> Reset
@@ -2087,7 +2143,10 @@ export default function App() {
             zoomControl
             className="map"
           >
-            <MapInitialBounds featureCollection={states} />
+            <MapInitialBounds
+              featureCollection={states}
+              hasActiveFeature={Boolean(selectedAssemblyNumber || selectedVillage || selectedDistrictCode || mapLevel !== "india")}
+            />
             {layersVisible.osm && (
               <TileLayer
                 attribution="&copy; OpenStreetMap contributors"
@@ -2477,6 +2536,18 @@ export default function App() {
           {/* REFERENCE UI OVERLAY: Top District, Current View & Stats Bar */}
           <div className="reference-top-bar">
             <div className="reference-left-cluster">
+              <button
+                type="button"
+                className="map-back-to-analytics-btn"
+                onClick={handleOpenLanding}
+                title="Return to Analytics Landing Page with current selection"
+              >
+                <IconArrowLeft size={13} />
+                <span>Back to Analytics</span>
+                {selectedAssembly && (
+                  <span className="map-back-tag">AC {selectedAssemblyNumber}</span>
+                )}
+              </button>
               <MapLayerControl
                 layersVisible={layersVisible}
                 toggleLayer={toggleLayer}

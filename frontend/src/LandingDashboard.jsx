@@ -182,6 +182,7 @@ export default function LandingDashboard({
   initialAC = "49",
   initialVillage = "",
   initialElectionYear = "2022",
+  initialDistrictCode = "",
   authAdmin = null,
   onLogout = null,
 }) {
@@ -189,7 +190,7 @@ export default function LandingDashboard({
   const [callingData, setCallingData] = useState(null);
 
   // Hierarchical selections
-  const [selectedDistrictCode, setSelectedDistrictCode] = useState("");
+  const [selectedDistrictCode, setSelectedDistrictCode] = useState(initialDistrictCode || "");
   const [selectedAC, setSelectedAC] = useState(initialAC);
   const [selectedVillageId, setSelectedVillageId] = useState(initialVillage);
   const [selectedVillage2Id, setSelectedVillage2Id] = useState("");
@@ -256,10 +257,19 @@ export default function LandingDashboard({
           setCallingData(data.callingStats || null);
 
           if (constList.length) {
-            const matchedInit = constList.find((c) => c.ac_no === initialAC);
+            const matchedInit = initialDistrictCode && initialAC
+              ? constList.find((c) => c.ac_no === initialAC && c.district_code === initialDistrictCode)
+              : constList.find((c) => c.ac_no === initialAC);
             if (matchedInit) {
               setSelectedDistrictCode(matchedInit.district_code || "");
               setSelectedAC(matchedInit.ac_no);
+            } else if (initialDistrictCode) {
+              const inDist = constList.filter((c) => c.district_code === initialDistrictCode);
+              if (inDist.length) {
+                const best = inDist.find((c) => c.booth_count > 0) || inDist[0];
+                setSelectedDistrictCode(best.district_code || "");
+                setSelectedAC(best.ac_no);
+              }
             } else {
               const best = constList.find((c) => c.booth_count > 0) || constList[0];
               setSelectedDistrictCode(best.district_code || "");
@@ -668,7 +678,7 @@ export default function LandingDashboard({
           <button
             type="button"
             className="gis-link-button"
-            onClick={() => onOpenGIS(selectedAC, selectedVillageId, electionYear)}
+            onClick={() => onOpenGIS(selectedAC, selectedVillageId, electionYear, selectedDistrictCode)}
             title="Open Interactive GIS Map"
           >
             <IconMap size={15} />
@@ -1077,7 +1087,7 @@ export default function LandingDashboard({
                       <button
                         type="button"
                         className="village-gis-btn"
-                        onClick={() => onOpenGIS(selectedAC, selectedVillage1Data.village_id || selectedVillage1Data.name, electionYear)}
+                        onClick={() => onOpenGIS(selectedAC, selectedVillage1Data.village_id || selectedVillage1Data.name, electionYear, selectedDistrictCode)}
                         title="Open Village 1 in GIS Dashboard"
                       >
                         <IconMap size={11} />
@@ -1208,7 +1218,7 @@ export default function LandingDashboard({
                       <button
                         type="button"
                         className="village-gis-btn"
-                        onClick={() => onOpenGIS(selectedAC, selectedVillage2Data.village_id || selectedVillage2Data.name, electionYear)}
+                        onClick={() => onOpenGIS(selectedAC, selectedVillage2Data.village_id || selectedVillage2Data.name, electionYear, selectedDistrictCode)}
                         title="Open Village 2 in GIS Dashboard"
                       >
                         <IconMap size={11} />
@@ -1422,7 +1432,7 @@ export default function LandingDashboard({
                     <button
                       type="button"
                       className="booth-header-village-link"
-                      onClick={() => onOpenGIS(selectedAC, selectedVillage1Data.village_id || selectedVillage1Data.name, electionYear)}
+                      onClick={() => onOpenGIS(selectedAC, selectedVillage1Data.village_id || selectedVillage1Data.name, electionYear, selectedDistrictCode)}
                       title="Open Village 1 in GIS Dashboard"
                     >
                       <IconPin size={12} /> {selectedVillage1Data.name} <span className="gis-nav-arrow">↗</span>
@@ -1554,7 +1564,7 @@ export default function LandingDashboard({
                               type="button"
                               className="table-village-link"
                               title={`Open ${booth.village_name} in GIS Dashboard`}
-                              onClick={() => onOpenGIS(selectedAC, booth.village_id || booth.village_name, electionYear)}
+                              onClick={() => onOpenGIS(selectedAC, booth.village_id || booth.village_name, electionYear, selectedDistrictCode)}
                             >
                               <IconPin size={11} />
                               <span>{booth.village_name}</span>
@@ -1804,7 +1814,7 @@ export default function LandingDashboard({
           <button
             type="button"
             className="gis-cta-button"
-            onClick={() => onOpenGIS(selectedAC, selectedVillageId, electionYear)}
+            onClick={() => onOpenGIS(selectedAC, selectedVillageId, electionYear, selectedDistrictCode)}
           >
             <IconMap size={16} />
             <span>Open GIS Map</span>
