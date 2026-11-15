@@ -1,4 +1,4 @@
-import { Fragment, useEffect, useMemo, useState } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState } from "react";
 import {
   MapContainer,
   TileLayer,
@@ -1840,7 +1840,7 @@ export default function App() {
     return (
       <LandingDashboard
         onOpenGIS={handleOpenGIS}
-        initialAC={selectedAssemblyNumber || "49"}
+        initialAC={selectedAssemblyNumber || ""}
         initialVillage={selectedVillage || ""}
         initialElectionYear={selectedElectionYear ? String(selectedElectionYear) : "2022"}
         initialDistrictCode={selectedDistrictCode || ""}
