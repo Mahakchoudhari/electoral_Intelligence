@@ -220,4 +220,15 @@ export function IconLogOut({ size = 16, className = "" }) {
   );
 }
 
+export function IconArrowLeft({ size = 16, className = "" }) {
+  return (
+    <svg viewBox="0 0 24 24" width={size} height={size} fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className={className}>
+      <line x1="19" y1="12" x2="5" y2="12" />
+      <polyline points="12 19 5 12 12 5" />
+    </svg>
+  );
+}
+
+
+
 
