@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import "./App.css";
 import "./Auth.css";
 import "./Admin.css";
@@ -169,6 +169,10 @@ export default function CallerDashboard() {
   const [adminDistrictFilter, setAdminDistrictFilter] = useState("");
   const [adminAcFilter, setAdminAcFilter] = useState("");
   const [selectedAdminAcs, setSelectedAdminAcs] = useState([]);
+  const [acPickerSearch, setAcPickerSearch] = useState("");
+  const [acPickerOpen, setAcPickerOpen] = useState(false);
+  const [acPickerDistrict, setAcPickerDistrict] = useState("all");
+  const acPickerRef = useRef(null);
   const [adminProblemFilter, setAdminProblemFilter] = useState("all");
   const [adminSearchQuery, setAdminSearchQuery] = useState("");
   const [debouncedAdminSearch, setDebouncedAdminSearch] = useState("");
@@ -266,6 +270,45 @@ export default function CallerDashboard() {
       .then(setAdminAssemblies)
       .catch(() => setAdminAssemblies([]));
   }, [token, currentView]);
+
+  useEffect(() => {
+    const handleClickOutside = (event) => {
+      if (acPickerRef.current && !acPickerRef.current.contains(event.target)) {
+        setAcPickerOpen(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  const uniqueDistricts = useMemo(() => {
+    const dSet = new Set();
+    adminAssemblies.forEach((a) => {
+      if (a.district_name) dSet.add(a.district_name);
+    });
+    return Array.from(dSet).sort();
+  }, [adminAssemblies]);
+
+  const filteredPickerAssemblies = useMemo(() => {
+    let list = adminAssemblies;
+    if (adminDistrictFilter) {
+      list = list.filter((a) => String(a.district_code) === String(adminDistrictFilter));
+    } else if (acPickerDistrict !== "all") {
+      list = list.filter((a) => a.district_name === acPickerDistrict);
+    }
+    if (acPickerSearch.trim()) {
+      const terms = acPickerSearch.trim().toLowerCase().split(/[, ]+/).filter(Boolean);
+      list = list.filter((a) => {
+        const acNoStr = String(a.ac_no).toLowerCase();
+        const nameStr = String(a.name || "").toLowerCase();
+        const distStr = String(a.district_name || "").toLowerCase();
+        return terms.some(
+          (term) => acNoStr.includes(term) || nameStr.includes(term) || distStr.includes(term)
+        );
+      });
+    }
+    return list;
+  }, [adminAssemblies, adminDistrictFilter, acPickerDistrict, acPickerSearch]);
 
   const loadAdminActivity = useCallback((showLoading = false) => {
     if (!token || currentView !== "admin") return;
@@ -848,32 +891,6 @@ export default function CallerDashboard() {
               </label>
 
               <label>
-                Assembly (AC) Multi-Compare
-                <select
-                  value=""
-                  onChange={(event) => {
-                    if (event.target.value) {
-                      toggleSelectAc(event.target.value);
-                    }
-                  }}
-                >
-                  <option value="">
-                    {selectedAdminAcs.length > 0
-                      ? `+ Add AC to compare (${selectedAdminAcs.length} active)...`
-                      : `+ Select ACs across any district (${adminAssemblies.length})...`}
-                  </option>
-                  {adminAssemblies.map((a) => {
-                    const isSelected = selectedAdminAcs.includes(a.ac_no);
-                    return (
-                      <option key={a.ac_no} value={a.ac_no}>
-                        {isSelected ? "✓ [Comparing] " : ""}{a.district_name ? `[${a.district_name}] ` : ""}AC {a.ac_no} - {a.name}
-                      </option>
-                    );
-                  })}
-                </select>
-              </label>
-
-              <label>
                 Call outcome
                 <select
                   value={adminProblemFilter}
@@ -886,43 +903,195 @@ export default function CallerDashboard() {
               </label>
             </div>
 
-            {selectedAdminAcs.length > 0 && (
-              <div className="admin-ac-compare-bar">
-                <div className="admin-ac-compare-bar-left">
-                  <span className="admin-ac-compare-tag">
-                    Comparing {selectedAdminAcs.length} AC{selectedAdminAcs.length > 1 ? "s" : ""}:
-                  </span>
-                  <div className="admin-ac-pills-list">
-                    {selectedAdminAcs.map((acNo) => {
-                      const acObj = adminAssemblies.find((a) => a.ac_no === acNo);
-                      return (
-                        <span key={acNo} className="admin-ac-pill">
-                          {acObj?.district_name && (
-                            <span className="admin-ac-pill-district">{acObj.district_name}</span>
-                          )}
-                          <span className="admin-ac-pill-name">AC {acNo} {acObj?.name || ""}</span>
+            {/* Dedicated Fast AC Search & Multi-Select Picker */}
+            <div className="admin-ac-picker-section" ref={acPickerRef}>
+              <div className="admin-ac-picker-top">
+                <div className="admin-ac-picker-input-wrap">
+                  <span className="admin-ac-picker-icon">🔍</span>
+                  <input
+                    type="text"
+                    className="admin-ac-picker-input"
+                    placeholder="Search ACs by name or number (e.g. '50', 'Chhaprauli', '57', 'Loni', 'Sardhana')..."
+                    value={acPickerSearch}
+                    onFocus={() => setAcPickerOpen(true)}
+                    onChange={(e) => {
+                      setAcPickerSearch(e.target.value);
+                      setAcPickerOpen(true);
+                    }}
+                  />
+                  {acPickerSearch && (
+                    <button
+                      type="button"
+                      className="admin-search-clear"
+                      onClick={() => setAcPickerSearch("")}
+                      title="Clear AC search"
+                    >
+                      ×
+                    </button>
+                  )}
+                  <button
+                    type="button"
+                    className="admin-ac-browse-toggle"
+                    onClick={() => setAcPickerOpen((prev) => !prev)}
+                  >
+                    {acPickerOpen
+                      ? "▲ Hide AC List"
+                      : `▼ Pick ACs (${selectedAdminAcs.length ? `${selectedAdminAcs.length} selected` : `all ${adminAssemblies.length}`})`}
+                  </button>
+                </div>
+
+                {selectedAdminAcs.length > 0 && (
+                  <button
+                    type="button"
+                    className="admin-ac-clear-btn"
+                    onClick={() => setSelectedAdminAcs([])}
+                  >
+                    Clear ACs ({selectedAdminAcs.length}) ✕
+                  </button>
+                )}
+              </div>
+
+              {/* Quick Select Key AC Chips */}
+              <div className="admin-ac-quick-chips">
+                <span className="admin-ac-quick-label">⚡ Quick Add ACs:</span>
+                {[50, 51, 52, 53, 57, 43, 44, 10, 11].map((acNo) => {
+                  const a = adminAssemblies.find((x) => x.ac_no === acNo);
+                  if (!a) return null;
+                  const isSelected = selectedAdminAcs.includes(acNo);
+                  return (
+                    <button
+                      key={acNo}
+                      type="button"
+                      className={`admin-ac-quick-chip ${isSelected ? "active" : ""}`}
+                      onClick={() => toggleSelectAc(acNo)}
+                      title={`${isSelected ? "Remove" : "Add"} AC ${acNo} (${a.name})`}
+                    >
+                      {isSelected ? "✓ " : "+ "}
+                      <span className="quick-chip-dist">{a.district_name}</span> AC {acNo} {a.name}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Popover Dropdown when open */}
+              {acPickerOpen && (
+                <div className="admin-ac-popover">
+                  <div className="admin-ac-popover-header">
+                    <div className="admin-ac-popover-title">
+                      <strong>Select Assemblies (ACs) to View Call Records</strong>
+                      <small>Click any AC to toggle. Multiple ACs can be selected across any district.</small>
+                    </div>
+                    <button
+                      type="button"
+                      className="admin-ac-done-btn"
+                      onClick={() => setAcPickerOpen(false)}
+                    >
+                      Done ✓
+                    </button>
+                  </div>
+
+                  {/* District pills in popover */}
+                  {!adminDistrictFilter && uniqueDistricts.length > 0 && (
+                    <div className="admin-ac-district-tabs">
+                      <button
+                        type="button"
+                        className={`admin-ac-dtab ${acPickerDistrict === "all" ? "active" : ""}`}
+                        onClick={() => setAcPickerDistrict("all")}
+                      >
+                        All Districts ({adminAssemblies.length})
+                      </button>
+                      {uniqueDistricts.map((dName) => {
+                        const countInD = adminAssemblies.filter((a) => a.district_name === dName).length;
+                        return (
                           <button
+                            key={dName}
                             type="button"
-                            className="admin-ac-pill-remove"
-                            onClick={() => toggleSelectAc(acNo)}
-                            title={`Remove AC ${acNo}`}
+                            className={`admin-ac-dtab ${acPickerDistrict === dName ? "active" : ""}`}
+                            onClick={() => setAcPickerDistrict(dName)}
                           >
-                            ×
+                            {dName} ({countInD})
                           </button>
-                        </span>
-                      );
-                    })}
+                        );
+                      })}
+                    </div>
+                  )}
+
+                  {/* Scrollable AC items list */}
+                  <div className="admin-ac-items-list">
+                    {filteredPickerAssemblies.length === 0 ? (
+                      <div className="admin-ac-empty">
+                        No assemblies match "{acPickerSearch}". Try searching by AC number (e.g. 50) or name.
+                      </div>
+                    ) : (
+                      filteredPickerAssemblies.map((a) => {
+                        const isSelected = selectedAdminAcs.includes(a.ac_no);
+                        return (
+                          <div
+                            key={a.ac_no}
+                            className={`admin-ac-item-row ${isSelected ? "selected" : ""}`}
+                            onClick={() => toggleSelectAc(a.ac_no)}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={isSelected}
+                              readOnly
+                              className="admin-ac-checkbox"
+                            />
+                            <span className="admin-ac-item-badge">AC {a.ac_no}</span>
+                            <span className="admin-ac-item-name">{a.name}</span>
+                            {a.district_name && (
+                              <span className="admin-ac-item-dist">{a.district_name}</span>
+                            )}
+                          </div>
+                        );
+                      })
+                    )}
+                  </div>
+
+                  <div className="admin-ac-popover-footer">
+                    <span>
+                      {selectedAdminAcs.length === 0
+                        ? "No ACs filtered (showing all calls)"
+                        : `Filtering calls for ${selectedAdminAcs.length} AC${selectedAdminAcs.length > 1 ? "s" : ""}`}
+                    </span>
+                    <button
+                      type="button"
+                      className="admin-action-btn-primary"
+                      onClick={() => setAcPickerOpen(false)}
+                      style={{ height: "30px", padding: "0 16px" }}
+                    >
+                      Done ({selectedAdminAcs.length} selected)
+                    </button>
                   </div>
                 </div>
-                <button
-                  type="button"
-                  className="admin-ac-clear-btn"
-                  onClick={() => setSelectedAdminAcs([])}
-                >
-                  Clear ACs ✕
-                </button>
-              </div>
-            )}
+              )}
+
+              {/* Active Selected AC Pills */}
+              {selectedAdminAcs.length > 0 && (
+                <div className="admin-ac-selected-pills">
+                  <span className="admin-ac-pills-label">Filtering calls for:</span>
+                  {selectedAdminAcs.map((acNo) => {
+                    const acObj = adminAssemblies.find((a) => a.ac_no === acNo);
+                    return (
+                      <span key={acNo} className="admin-ac-pill">
+                        {acObj?.district_name && (
+                          <span className="admin-ac-pill-district">{acObj.district_name}</span>
+                        )}
+                        <span className="admin-ac-pill-name">AC {acNo} {acObj?.name || ""}</span>
+                        <button
+                          type="button"
+                          className="admin-ac-pill-remove"
+                          onClick={() => toggleSelectAc(acNo)}
+                          title={`Remove AC ${acNo}`}
+                        >
+                          ×
+                        </button>
+                      </span>
+                    );
+                  })}
+                </div>
+              )}
+            </div>
 
             <div className="admin-search-row">
               <div className="admin-search-box">
@@ -1226,6 +1395,29 @@ export default function CallerDashboard() {
                   </button>
                 </div>
               </div>
+
+              {selectedAdminAcs.length > 0 && (
+                <div className="admin-active-ac-feed-banner">
+                  <div className="admin-active-ac-feed-text">
+                    <span className="admin-active-ac-icon">🎯</span>
+                    <span>
+                      Filtered to <b>{selectedAdminAcs.length} AC{selectedAdminAcs.length > 1 ? "s" : ""}:</b>{" "}
+                      {selectedAdminAcs.map((acNo) => {
+                        const a = adminAssemblies.find((x) => x.ac_no === acNo);
+                        return a ? `${a.name} (AC ${acNo})` : `AC ${acNo}`;
+                      }).join(", ")}
+                    </span>
+                    <span className="admin-active-ac-record-count">({callsList.length} calls found)</span>
+                  </div>
+                  <button
+                    type="button"
+                    className="admin-clear-filter-btn"
+                    onClick={() => setSelectedAdminAcs([])}
+                  >
+                    Clear AC filter ✕
+                  </button>
+                </div>
+              )}
 
               {callsList.length ? (
                 <section className="admin-calls-feed">
