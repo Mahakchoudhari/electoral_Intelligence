@@ -124,6 +124,8 @@ const blankNewContact = {
 export default function CallerDashboard() {
   const [token, setToken] = useState(() => sessionStorage.getItem("caller-token") || "");
   const [role, setRole] = useState(() => sessionStorage.getItem("caller-role") || "");
+  const [portalMode, setPortalMode] = useState(() => sessionStorage.getItem("caller-portal-mode") || "");
+  const currentView = portalMode || (role === "admin" ? "admin" : "caller");
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
   const [isAdminLogin, setIsAdminLogin] = useState(false);
@@ -166,6 +168,7 @@ export default function CallerDashboard() {
   const [callerFilter, setCallerFilter] = useState("");
   const [adminDistrictFilter, setAdminDistrictFilter] = useState("");
   const [adminAcFilter, setAdminAcFilter] = useState("");
+  const [selectedAdminAcs, setSelectedAdminAcs] = useState([]);
   const [adminProblemFilter, setAdminProblemFilter] = useState("all");
   const [adminSearchQuery, setAdminSearchQuery] = useState("");
   const [debouncedAdminSearch, setDebouncedAdminSearch] = useState("");
@@ -182,8 +185,10 @@ export default function CallerDashboard() {
   const signOut = useCallback(() => {
     sessionStorage.removeItem("caller-token");
     sessionStorage.removeItem("caller-role");
+    sessionStorage.removeItem("caller-portal-mode");
     setToken(""); setDistricts([]); setAssemblies([]); setVillages([]); setContacts([]);
     setRole("");
+    setPortalMode("");
     setDistrictCode(""); setAcNo(""); setVillageId(""); setActiveContact(null);
   }, []);
 
@@ -255,24 +260,26 @@ export default function CallerDashboard() {
   }, [adminSearchQuery]);
 
   useEffect(() => {
-    if (!token || role !== "admin") return;
-    const url = adminDistrictFilter
-      ? `/api/caller/assemblies?district_code=${encodeURIComponent(adminDistrictFilter)}`
-      : `/api/caller/assemblies`;
-    request(url, token)
+    if (!token || currentView !== "admin") return;
+    // Always load all assemblies across districts for cross-district AC comparison
+    request("/api/caller/assemblies", token)
       .then(setAdminAssemblies)
       .catch(() => setAdminAssemblies([]));
-  }, [token, role, adminDistrictFilter]);
+  }, [token, currentView]);
 
   const loadAdminActivity = useCallback((showLoading = false) => {
-    if (!token || role !== "admin") return;
+    if (!token || currentView !== "admin") return;
     let cancelled = false;
     const params = new URLSearchParams();
     if (dateFrom) params.set("date_from", dateFrom);
     if (dateTo) params.set("date_to", dateTo);
     if (callerFilter) params.set("caller_pid", callerFilter);
     if (adminDistrictFilter) params.set("district_code", adminDistrictFilter);
-    if (adminAcFilter) params.set("ac_no", adminAcFilter);
+    if (selectedAdminAcs.length > 0) {
+      params.set("ac_nos", selectedAdminAcs.join(","));
+    } else if (adminAcFilter) {
+      params.set("ac_no", adminAcFilter);
+    }
     if (adminProblemFilter === "issues") params.set("has_problem", "true");
     else if (adminProblemFilter === "clear") params.set("has_problem", "false");
     if (debouncedAdminSearch.trim()) params.set("search", debouncedAdminSearch.trim());
@@ -288,14 +295,14 @@ export default function CallerDashboard() {
       })
       .finally(() => { if (!cancelled && showLoading) setAdminLoading(false); });
     return () => { cancelled = true; };
-  }, [token, role, dateFrom, dateTo, callerFilter, adminDistrictFilter, adminAcFilter, adminProblemFilter, debouncedAdminSearch, signOut]);
+  }, [token, currentView, dateFrom, dateTo, callerFilter, adminDistrictFilter, adminAcFilter, selectedAdminAcs, adminProblemFilter, debouncedAdminSearch, signOut]);
 
   useEffect(() => {
-    if (!token || role !== "admin") return;
+    if (!token || currentView !== "admin") return;
     loadAdminActivity(true);
     const refreshTimer = window.setInterval(() => loadAdminActivity(false), 30000);
     return () => window.clearInterval(refreshTimer);
-  }, [loadAdminActivity, token, role]);
+  }, [loadAdminActivity, token, currentView]);
 
   async function handleAuth(event) {
     event.preventDefault(); setBusy(true); setLoginError("");
@@ -306,9 +313,14 @@ export default function CallerDashboard() {
       if (isAdminLogin && result.role !== "admin") {
         throw new Error("This account does not have administrator access.");
       }
+      const initialPortal = isAdminLogin ? "admin" : "caller";
       sessionStorage.setItem("caller-token", result.access_token);
       sessionStorage.setItem("caller-role", result.role);
-      setToken(result.access_token); setRole(result.role); setPassword("");
+      sessionStorage.setItem("caller-portal-mode", initialPortal);
+      setToken(result.access_token);
+      setRole(result.role);
+      setPortalMode(initialPortal);
+      setPassword("");
     } catch (error) { setLoginError(error.message); }
     finally { setBusy(false); }
   }
@@ -552,7 +564,7 @@ export default function CallerDashboard() {
     </main>
   );
 
-  if (role === "admin") {
+  if (currentView === "admin") {
     const callsList = adminActivity.all_calls && adminActivity.all_calls.length
       ? adminActivity.all_calls
       : (adminActivity.daily_activity || []).flatMap((d) => d.calls || []);
@@ -567,10 +579,19 @@ export default function CallerDashboard() {
       ? adminAssemblies.find((a) => String(a.ac_no) === String(adminAcFilter))
       : null;
 
+    const toggleSelectAc = (acVal) => {
+      const num = Number(acVal);
+      if (!num) return;
+      setSelectedAdminAcs((prev) =>
+        prev.includes(num) ? prev.filter((id) => id !== num) : [...prev, num]
+      );
+    };
+
     const hasActiveFilters = Boolean(
       callerFilter ||
       adminDistrictFilter ||
       adminAcFilter ||
+      selectedAdminAcs.length > 0 ||
       adminProblemFilter !== "all" ||
       adminSearchQuery.trim() ||
       dateFrom !== localDate(-13) ||
@@ -597,7 +618,9 @@ export default function CallerDashboard() {
       if (selectedDistrictObj) {
         filenameParts.push(selectedDistrictObj.name.replace(/[^a-zA-Z0-9]/g, "_"));
       }
-      if (selectedAcObj) {
+      if (selectedAdminAcs.length > 0) {
+        filenameParts.push(`ACs_${selectedAdminAcs.join("-")}`);
+      } else if (selectedAcObj) {
         filenameParts.push(`AC${selectedAcObj.ac_no}_${selectedAcObj.name.replace(/[^a-zA-Z0-9]/g, "_")}`);
       }
       if (dateFrom && dateTo) {
@@ -643,6 +666,7 @@ export default function CallerDashboard() {
       setCallerFilter("");
       setAdminDistrictFilter("");
       setAdminAcFilter("");
+      setSelectedAdminAcs([]);
       setAdminProblemFilter("all");
       setAdminSearchQuery("");
     };
@@ -661,6 +685,17 @@ export default function CallerDashboard() {
             <span>Electoral Intelligence<small>ADMIN CONSOLE</small></span>
           </a>
           <div className="caller-header-right">
+            <button
+              onClick={() => {
+                sessionStorage.setItem("caller-portal-mode", "caller");
+                setPortalMode("caller");
+              }}
+              className="admin-action-btn-secondary"
+              title="Open Caller Workspace as caller"
+              style={{ background: "#f0fdf4", color: "#166534", borderColor: "#bbf7d0", fontWeight: 650 }}
+            >
+              📞 Open Caller Workspace
+            </button>
             <button
               onClick={() => { setShowCreateUserModal(true); setCreateUserError(""); }}
               className="admin-action-btn-primary"
@@ -813,19 +848,28 @@ export default function CallerDashboard() {
               </label>
 
               <label>
-                Assembly (AC)
+                Assembly (AC) Multi-Compare
                 <select
-                  value={adminAcFilter}
-                  onChange={(event) => setAdminAcFilter(event.target.value)}
+                  value=""
+                  onChange={(event) => {
+                    if (event.target.value) {
+                      toggleSelectAc(event.target.value);
+                    }
+                  }}
                 >
                   <option value="">
-                    {adminDistrictFilter ? "All ACs in District" : "All Assemblies"} ({adminAssemblies.length})
+                    {selectedAdminAcs.length > 0
+                      ? `+ Add AC to compare (${selectedAdminAcs.length} active)...`
+                      : `+ Select ACs across any district (${adminAssemblies.length})...`}
                   </option>
-                  {adminAssemblies.map((a) => (
-                    <option key={a.ac_no} value={a.ac_no}>
-                      {a.name} (AC {a.ac_no})
-                    </option>
-                  ))}
+                  {adminAssemblies.map((a) => {
+                    const isSelected = selectedAdminAcs.includes(a.ac_no);
+                    return (
+                      <option key={a.ac_no} value={a.ac_no}>
+                        {isSelected ? "✓ [Comparing] " : ""}{a.district_name ? `[${a.district_name}] ` : ""}AC {a.ac_no} - {a.name}
+                      </option>
+                    );
+                  })}
                 </select>
               </label>
 
@@ -841,6 +885,44 @@ export default function CallerDashboard() {
                 </select>
               </label>
             </div>
+
+            {selectedAdminAcs.length > 0 && (
+              <div className="admin-ac-compare-bar">
+                <div className="admin-ac-compare-bar-left">
+                  <span className="admin-ac-compare-tag">
+                    Comparing {selectedAdminAcs.length} AC{selectedAdminAcs.length > 1 ? "s" : ""}:
+                  </span>
+                  <div className="admin-ac-pills-list">
+                    {selectedAdminAcs.map((acNo) => {
+                      const acObj = adminAssemblies.find((a) => a.ac_no === acNo);
+                      return (
+                        <span key={acNo} className="admin-ac-pill">
+                          {acObj?.district_name && (
+                            <span className="admin-ac-pill-district">{acObj.district_name}</span>
+                          )}
+                          <span className="admin-ac-pill-name">AC {acNo} {acObj?.name || ""}</span>
+                          <button
+                            type="button"
+                            className="admin-ac-pill-remove"
+                            onClick={() => toggleSelectAc(acNo)}
+                            title={`Remove AC ${acNo}`}
+                          >
+                            ×
+                          </button>
+                        </span>
+                      );
+                    })}
+                  </div>
+                </div>
+                <button
+                  type="button"
+                  className="admin-ac-clear-btn"
+                  onClick={() => setSelectedAdminAcs([])}
+                >
+                  Clear ACs ✕
+                </button>
+              </div>
+            )}
 
             <div className="admin-search-row">
               <div className="admin-search-box">
@@ -880,7 +962,16 @@ export default function CallerDashboard() {
                     <button type="button" className="admin-chip-remove" onClick={() => { setAdminDistrictFilter(""); setAdminAcFilter(""); }}>×</button>
                   </span>
                 )}
-                {selectedAcObj && (
+                {selectedAdminAcs.length > 0 && (
+                  <span className="admin-chip">
+                    Comparing ACs: <b>{selectedAdminAcs.map((num) => {
+                      const a = adminAssemblies.find((x) => x.ac_no === num);
+                      return a ? `${a.name} (${num})` : `AC ${num}`;
+                    }).join(", ")}</b>
+                    <button type="button" className="admin-chip-remove" onClick={() => setSelectedAdminAcs([])}>×</button>
+                  </span>
+                )}
+                {selectedAcObj && selectedAdminAcs.length === 0 && (
                   <span className="admin-chip">
                     AC: <b>{selectedAcObj.name}</b>
                     <button type="button" className="admin-chip-remove" onClick={() => setAdminAcFilter("")}>×</button>
@@ -977,6 +1068,90 @@ export default function CallerDashboard() {
               <div className="admin-metric-sub">Local village areas</div>
             </article>
           </section>
+
+          {/* Cross-District Assembly Comparison Section */}
+          {selectedAdminAcs.length > 0 && (adminActivity.assembly_comparison || []).length > 0 && (
+            <section className="admin-ac-comparison-section">
+              <div className="admin-comparison-header">
+                <div>
+                  <div className="caller-kicker">CROSS-DISTRICT BENCHMARKING</div>
+                  <h2 style={{ margin: "4px 0", fontSize: "1.2rem", fontWeight: 700, color: "#0f172a" }}>
+                    Assembly Constituency Comparative Analysis
+                  </h2>
+                  <p style={{ margin: 0, fontSize: "0.85rem", color: "#64748b" }}>
+                    Side-by-side call intelligence and issue benchmarking across {adminActivity.assembly_comparison.length} selected constituencies.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  className="admin-clear-filter-btn"
+                  onClick={() => setSelectedAdminAcs([])}
+                >
+                  Clear Comparison ✕
+                </button>
+              </div>
+
+              <div className="admin-ac-comparison-grid">
+                {adminActivity.assembly_comparison.map((ac) => (
+                  <div key={ac.ac_no} className="admin-ac-compare-card">
+                    <div className="admin-ac-card-header">
+                      <div>
+                        <span className="admin-ac-district-badge">{ac.district_name || "District"}</span>
+                        <h3 className="admin-ac-title">AC {ac.ac_no} - {ac.name}</h3>
+                      </div>
+                      <button
+                        type="button"
+                        className="admin-ac-remove-btn"
+                        onClick={() => toggleSelectAc(ac.ac_no)}
+                        title="Remove AC from comparison"
+                      >
+                        ×
+                      </button>
+                    </div>
+
+                    <div className="admin-ac-stat-row">
+                      <div className="admin-ac-stat-item">
+                        <span className="stat-label">Calls Logged</span>
+                        <strong className="stat-value">{ac.total_calls}</strong>
+                      </div>
+                      <div className="admin-ac-stat-item">
+                        <span className="stat-label">Issues Flagged</span>
+                        <strong className="stat-value text-amber">{ac.issues_reported}</strong>
+                      </div>
+                      <div className="admin-ac-stat-item">
+                        <span className="stat-label">Clear Calls</span>
+                        <strong className="stat-value text-green">{ac.clear_calls}</strong>
+                      </div>
+                      <div className="admin-ac-stat-item">
+                        <span className="stat-label">Issue Rate</span>
+                        <strong className="stat-value">{ac.issue_rate_pct}%</strong>
+                      </div>
+                    </div>
+
+                    <div className="admin-ac-progress-bar">
+                      <div
+                        className="admin-ac-progress-fill"
+                        style={{
+                          width: `${Math.min(100, ac.issue_rate_pct)}%`,
+                          background: ac.issue_rate_pct > 25 ? "#ef4444" : ac.issue_rate_pct > 10 ? "#f59e0b" : "#10b981",
+                        }}
+                      />
+                    </div>
+
+                    <div className="admin-ac-footer-info">
+                      <span>🏘️ <b>{ac.villages_count}</b> villages covered</span>
+                      <span>📞 <b>{ac.callers?.length || 0}</b> callers active</span>
+                    </div>
+                    {ac.callers?.length > 0 && (
+                      <div className="admin-ac-callers-list">
+                        Callers: {ac.callers.join(", ")}
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
+            </section>
+          )}
 
           {/* Banner when viewing calls by a single caller */}
           {selectedCallerObj && (
@@ -1777,6 +1952,22 @@ export default function CallerDashboard() {
       <header className="caller-header">
         <a href="/" className="caller-logo"><span className="caller-logo-mark">EI</span><span>Electoral Intelligence<small>FIELD CALLING</small></span></a>
         <div className="caller-header-right">
+          {role === "admin" && (
+            <button
+              onClick={() => {
+                sessionStorage.setItem("caller-portal-mode", "admin");
+                setPortalMode("admin");
+              }}
+              className="caller-action-btn"
+              style={{ background: "#4f46e5", color: "#ffffff", borderColor: "#6366f1", fontWeight: 650 }}
+              title="Return to Admin Console"
+            >
+              📊 Switch to Admin Dashboard
+            </button>
+          )}
+          {role === "admin" && (
+            <span className="admin-role-pill" style={{ margin: "0 4px" }}>ADMIN (CALLER MODE)</span>
+          )}
           <button onClick={() => openAuditTrail()} className="caller-action-btn">Audit Trail 📜</button>
           <span className="caller-live-dot"/> Secure workspace
           <button onClick={signOut}>Sign out ↗</button>

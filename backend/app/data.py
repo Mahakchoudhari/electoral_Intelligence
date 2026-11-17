@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 import os
 import csv
+import re
 from pathlib import Path
 from typing import Any
 
@@ -392,11 +393,52 @@ async def villages(pool: Any, ac_no: str, election_year: int | None = None) -> d
                   COALESCE(vv.votes_asp, 0) AS votes_asp,
                   COALESCE(vv.votes_ind, 0) AS votes_ind
            FROM vb_grouped g
-           LEFT JOIN v_votes vv ON vv.norm_name = g.norm_name
-           ORDER BY g.name, g.objectid""",
+            LEFT JOIN v_votes vv ON vv.norm_name = g.norm_name
+            ORDER BY g.name, g.objectid""",
         str(ac_no),
         election_year,
     )
+
+    # Fetch issues reported in this AC
+    issue_rows = await pool.fetch(
+        """SELECT c.cid, c.summary, c.feedback, c.category, c.created_at,
+                  COALESCE(c.village_id, ss.village_id) AS village_id,
+                  COALESCE(v.name, 'Village ' || COALESCE(c.village_id, ss.village_id)) AS village_name,
+                  ss.name AS contact_name,
+                  ss.phone AS contact_phone
+           FROM public."call" c
+           LEFT JOIN sampark_sutra ss ON ss.sid = c.sid
+           LEFT JOIN villages v ON v.village_id = COALESCE(c.village_id, ss.village_id)
+           WHERE COALESCE(c.ac_no, ss.ac_no)::text = $1
+             AND c.flag IN ('true', '1', 'yes', 'problem', 'substantive')
+           ORDER BY c.created_at DESC, c.cid DESC""",
+        str(ac_no),
+    )
+    issues_by_vid: dict[int, list[dict[str, Any]]] = {}
+    issues_by_norm_name: dict[str, list[dict[str, Any]]] = {}
+    matched_cids: set[int] = set()
+
+    for i_row in issue_rows:
+        i_dict = {
+            "report_id": i_row["cid"],
+            "occurred_at": i_row["created_at"].isoformat() if i_row["created_at"] else None,
+            "summary": i_row["summary"],
+            "feedback": i_row["feedback"],
+            "category": i_row["category"],
+            "village_id": i_row["village_id"],
+            "village_name": i_row["village_name"],
+            "contact_name": i_row["contact_name"],
+            "contact_phone": i_row["contact_phone"],
+        }
+        vid = i_row["village_id"]
+        if vid is not None:
+            issues_by_vid.setdefault(int(vid), []).append(i_dict)
+        vname = i_row["village_name"]
+        if vname:
+            norm_vn = re.sub(r'[^a-zA-Z0-9\u0900-\u097F]', '', str(vname)).lower()
+            if norm_vn:
+                issues_by_norm_name.setdefault(norm_vn, []).append(i_dict)
+
     features = []
     for row in rows:
         polled = row["votes_polled"] or 0
@@ -419,6 +461,44 @@ async def villages(pool: Any, ac_no: str, election_year: int | None = None) -> d
         sorted_parties = sorted(party_votes.items(), key=lambda item: -item[1])
         winner = sorted_parties[0][0] if sorted_parties and sorted_parties[0][1] > 0 else None
 
+        # Match issues to this boundary feature
+        v_matched_issues: list[dict[str, Any]] = []
+        seen_cids: set[int] = set()
+
+        for vid in (row["village_ids"] or []):
+            for iss in issues_by_vid.get(int(vid), []):
+                if iss["report_id"] not in seen_cids:
+                    seen_cids.add(iss["report_id"])
+                    v_matched_issues.append(iss)
+                    matched_cids.add(iss["report_id"])
+
+        if row["village_id"] and row["village_id"] not in (row["village_ids"] or []):
+            for iss in issues_by_vid.get(int(row["village_id"]), []):
+                if iss["report_id"] not in seen_cids:
+                    seen_cids.add(iss["report_id"])
+                    v_matched_issues.append(iss)
+                    matched_cids.add(iss["report_id"])
+
+        for r_name in [row["name"], row["alternate_name"]]:
+            if not r_name:
+                continue
+            norm_r = re.sub(r'[^a-zA-Z0-9\u0900-\u097F]', '', str(r_name)).lower()
+            if not norm_r:
+                continue
+            for iss in issues_by_norm_name.get(norm_r, []):
+                if iss["report_id"] not in seen_cids:
+                    seen_cids.add(iss["report_id"])
+                    v_matched_issues.append(iss)
+                    matched_cids.add(iss["report_id"])
+            if len(norm_r) >= 4:
+                for norm_vn, iss_list in issues_by_norm_name.items():
+                    if len(norm_vn) >= 4 and (norm_vn in norm_r or norm_r in norm_vn):
+                        for iss in iss_list:
+                            if iss["report_id"] not in seen_cids:
+                                seen_cids.add(iss["report_id"])
+                                v_matched_issues.append(iss)
+                                matched_cids.add(iss["report_id"])
+
         features.append({
             "type": "Feature",
             "geometry": json.loads(row["geometry"]) if row["geometry"] else None,
@@ -440,8 +520,58 @@ async def villages(pool: Any, ac_no: str, election_year: int | None = None) -> d
                 "party_votes": party_votes,
                 "party_shares": party_shares,
                 "winner": winner,
+                "issues_count": len(v_matched_issues),
+                "issues": v_matched_issues,
+                "has_issues": len(v_matched_issues) > 0,
             },
         })
+
+    # Add features for issue villages in this AC that had no polygon boundary
+    unmatched_issues_by_vid: dict[int, list[dict[str, Any]]] = {}
+    for i_row in issue_rows:
+        if i_row["cid"] not in matched_cids:
+            vid = i_row["village_id"] or 0
+            unmatched_issues_by_vid.setdefault(vid, []).append({
+                "report_id": i_row["cid"],
+                "occurred_at": i_row["created_at"].isoformat() if i_row["created_at"] else None,
+                "summary": i_row["summary"],
+                "feedback": i_row["feedback"],
+                "category": i_row["category"],
+                "village_id": i_row["village_id"],
+                "village_name": i_row["village_name"],
+                "contact_name": i_row["contact_name"],
+                "contact_phone": i_row["contact_phone"],
+            })
+
+    for uv_id, uv_issues in unmatched_issues_by_vid.items():
+        uv_name = uv_issues[0]["village_name"] or f"Village {uv_id}"
+        features.append({
+            "type": "Feature",
+            "geometry": None,
+            "properties": {
+                "village_id": uv_id,
+                "village_ids": [uv_id] if uv_id else [],
+                "objectid": uv_id if uv_id else (900000 + len(features)),
+                "ac_no": str(ac_no),
+                "village_name": uv_name,
+                "name": uv_name,
+                "alternate_name": None,
+                "vil_lgd": None,
+                "district_codes": [],
+                "district_names": [],
+                "source_objectids": [],
+                "sentiment": None,
+                "electors": 0,
+                "votes_polled": 0,
+                "party_votes": {},
+                "party_shares": {},
+                "winner": None,
+                "issues_count": len(uv_issues),
+                "issues": uv_issues,
+                "has_issues": True,
+            },
+        })
+
     return {
         "type": "FeatureCollection",
         "features": features,
@@ -456,6 +586,7 @@ async def call_reports(
     village_ids: list[int] | None = None,
     level: str = "state",
     limit: int = 100,
+    only_issues: bool = False,
 ) -> list[dict[str, Any]]:
     """Return substantive call reports for any selected geography, newest first."""
     if pool is None:
@@ -467,7 +598,9 @@ async def call_reports(
                   COALESCE(c.ac_no, ss.ac_no) AS ac_no,
                   COALESCE(c.village_id, ss.village_id) AS village_id,
                   a.name AS ac_name, d.name AS district_name,
-                  COALESCE(v.name, vb.name) AS village_name
+                  COALESCE(v.name, vb.name) AS village_name,
+                  ss.name AS contact_name,
+                  ss.phone AS contact_phone
            FROM public."call" c
            LEFT JOIN sampark_sutra ss ON ss.sid = c.sid
            JOIN ac a ON a.ac_no = COALESCE(c.ac_no, ss.ac_no)
@@ -486,18 +619,21 @@ async def call_reports(
                  COALESCE(array_length($5::bigint[], 1), 0) > 0
                  AND COALESCE(c.village_id, ss.village_id) = ANY($5::bigint[])
              ))
+             AND ($7::boolean IS FALSE OR c.flag IN ('true', '1', 'yes', 'problem', 'substantive'))
            ORDER BY c.created_at DESC, c.cid DESC
            LIMIT $6""",
-        state, district_code, ac_no, level, village_ids or [], bounded_limit,
+        state, district_code, ac_no, level, village_ids or [], bounded_limit, only_issues,
     )
     return [
         {"report_id": row["cid"], "provider": row["provider"],
-         "call_id": row["provider_call_id"], "occurred_at": row["created_at"].isoformat(),
+         "call_id": row["provider_call_id"], "occurred_at": row["created_at"].isoformat() if row["created_at"] else None,
          "issue": row["summary"], "category": row["category"],
          "has_problem": str(row["flag"] or "").lower() in ("true", "1", "yes", "problem", "substantive"),
          "feedback": row["feedback"], "ac_no": row["ac_no"], "village_id": row["village_id"],
          "area": row["village_name"] or row["ac_name"],
-         "district": row["district_name"]}
+         "district": row["district_name"],
+         "contact_name": row["contact_name"],
+         "contact_phone": row["contact_phone"]}
         for row in rows
     ]
 
@@ -612,6 +748,54 @@ async def poll_results(
         election_year,
         village_ids or ([village_id] if village_id is not None else None),
     )
+
+    effective_village_ids = village_ids or ([village_id] if village_id is not None else None)
+    scoped_issues_rows = await pool.fetch(
+        """SELECT c.cid, c.created_at, c.summary, c.category, c.feedback,
+                  COALESCE(c.ac_no, ss.ac_no) AS ac_no,
+                  COALESCE(c.village_id, ss.village_id) AS village_id,
+                  a.name AS ac_name,
+                  COALESCE(v.name, 'Village ' || COALESCE(c.village_id, ss.village_id)) AS village_name,
+                  ss.name AS contact_name,
+                  ss.phone AS contact_phone
+           FROM public."call" c
+           LEFT JOIN sampark_sutra ss ON ss.sid = c.sid
+           LEFT JOIN villages v ON v.village_id = COALESCE(c.village_id, ss.village_id)
+           LEFT JOIN ac a ON a.ac_no = COALESCE(c.ac_no, ss.ac_no)
+           LEFT JOIN districts d ON d.district_code = a.district_code
+           WHERE c.flag IN ('true', '1', 'yes', 'problem', 'substantive')
+             AND ($1::text IS NULL OR lower(d.state_name) = lower($1))
+             AND ($2::text IS NULL OR d.district_code::text = $2)
+             AND ($3::text IS NULL OR COALESCE(c.ac_no, ss.ac_no)::text = $3)
+             AND ($4::text <> 'village' OR (
+                 COALESCE(array_length($5::bigint[], 1), 0) > 0
+                 AND COALESCE(c.village_id, ss.village_id) = ANY($5::bigint[])
+             ))
+           ORDER BY c.created_at DESC, c.cid DESC
+           LIMIT 100""",
+        state_name,
+        district_code,
+        ac_no,
+        level,
+        effective_village_ids,
+    )
+    scoped_issues = [
+        {
+            "report_id": r["cid"],
+            "occurred_at": r["created_at"].isoformat() if r["created_at"] else None,
+            "summary": r["summary"],
+            "category": r["category"],
+            "feedback": r["feedback"],
+            "ac_no": str(r["ac_no"]) if r["ac_no"] is not None else None,
+            "ac_name": r["ac_name"],
+            "village_id": r["village_id"],
+            "village_name": r["village_name"],
+            "contact_name": r["contact_name"],
+            "contact_phone": r["contact_phone"],
+        }
+        for r in scoped_issues_rows
+    ]
+
     if row is None:
         return {
             "election": None,
@@ -622,6 +806,8 @@ async def poll_results(
             "valid_votes": 0,
             "party_votes": [],
             "booths": [],
+            "issues_count": len(scoped_issues),
+            "issues": scoped_issues,
         }
 
     total_votes = row["votes_polled"] or 0
@@ -643,7 +829,6 @@ async def poll_results(
         parties = [("BJP", 0), ("RLD", 0)]
 
     booths_list: list[dict[str, Any]] = []
-    effective_village_ids = village_ids or ([village_id] if village_id is not None else None)
     if level == "village" and effective_village_ids and row["election_id"]:
         booth_rows = await pool.fetch(
             """SELECT eb.booth_id,
@@ -776,6 +961,8 @@ async def poll_results(
             for name, votes in parties
         ],
         "booths": booths_list,
+        "issues_count": len(scoped_issues),
+        "issues": scoped_issues,
     }
 
 
@@ -860,6 +1047,7 @@ async def calling_stats(
     pool: Any,
     ac_no: str | None = None,
     village_id: int | None = None,
+    district_code: str | None = None,
 ) -> dict[str, Any]:
     """Return comprehensive calling telephony metrics, category breakdown, daily trends, and recent calls."""
     if pool is None:
@@ -877,20 +1065,24 @@ async def calling_stats(
            FROM public.\"call\""""
     )
 
-    # Filtered KPIs if ac_no or village_id specified
+    # Filtered KPIs if ac_no, village_id, or district_code specified
     filtered = None
-    if ac_no is not None or village_id is not None:
+    if ac_no is not None or village_id is not None or district_code is not None:
         filtered_row = await pool.fetchrow(
             """SELECT 
                    COUNT(*)::int AS total_calls,
-                   COUNT(CASE WHEN flag IN ('true', '1', 'yes', 'problem', 'substantive') THEN 1 END)::int AS issues_reported,
-                   COUNT(CASE WHEN flag NOT IN ('true', '1', 'yes', 'problem', 'substantive') OR flag IS NULL THEN 1 END)::int AS clear_calls,
-                   COUNT(DISTINCT village_id)::int AS villages_covered,
-                   COUNT(DISTINCT sid)::int AS unique_contacts_called
-               FROM public.\"call\"
-               WHERE ($1::text IS NULL OR ac_no::text = $1)
-                 AND ($2::bigint IS NULL OR village_id = $2)""",
-            ac_no, village_id,
+                   COUNT(CASE WHEN c.flag IN ('true', '1', 'yes', 'problem', 'substantive') THEN 1 END)::int AS issues_reported,
+                   COUNT(CASE WHEN c.flag NOT IN ('true', '1', 'yes', 'problem', 'substantive') OR c.flag IS NULL THEN 1 END)::int AS clear_calls,
+                   COUNT(DISTINCT COALESCE(c.village_id, ss.village_id))::int AS villages_covered,
+                   COUNT(DISTINCT c.sid)::int AS unique_contacts_called
+               FROM public.\"call\" c
+               LEFT JOIN sampark_sutra ss ON ss.sid = c.sid
+               LEFT JOIN ac a ON a.ac_no = COALESCE(c.ac_no, ss.ac_no)
+               LEFT JOIN districts d ON d.district_code = a.district_code
+               WHERE ($1::text IS NULL OR COALESCE(c.ac_no, ss.ac_no)::text = $1)
+                 AND ($2::bigint IS NULL OR COALESCE(c.village_id, ss.village_id) = $2)
+                 AND ($3::text IS NULL OR d.district_code::text = $3)""",
+            ac_no, village_id, district_code,
         )
         if filtered_row:
             tot = filtered_row["total_calls"]
@@ -965,24 +1157,84 @@ async def calling_stats(
         for row in ac_rows
     ]
 
-    # Recent calls feed
-    recent_rows = await pool.fetch(
+    # Dedicated Issues Feed (with caller remarks / feedback)
+    issue_rows = await pool.fetch(
         """SELECT c.cid, c.created_at, c.summary, c.category, c.feedback, c.flag,
                   COALESCE(c.ac_no, ss.ac_no) AS ac_no,
                   COALESCE(c.village_id, ss.village_id) AS village_id,
                   a.name AS ac_name,
-                  COALESCE(v.name, 'Village ' || COALESCE(c.village_id, ss.village_id)) AS village_name,
+                  d.district_code,
+                  d.name AS district_name,
+                  COALESCE(v.name, vb.name, 'Village ' || COALESCE(c.village_id, ss.village_id)) AS village_name,
                   ss.name AS contact_name,
                   ss.phone AS contact_phone
            FROM public.\"call\" c
            LEFT JOIN sampark_sutra ss ON ss.sid = c.sid
            LEFT JOIN ac a ON a.ac_no = COALESCE(c.ac_no, ss.ac_no)
+           LEFT JOIN districts d ON d.district_code = a.district_code
            LEFT JOIN villages v ON v.village_id = COALESCE(c.village_id, ss.village_id)
+           LEFT JOIN LATERAL (
+               SELECT MIN(vb.name) AS name
+               FROM village_boundaries vb
+               WHERE vb.village_id = COALESCE(c.village_id, ss.village_id)
+                 AND vb.ac_no = COALESCE(c.ac_no, ss.ac_no)
+           ) vb ON TRUE
+           WHERE c.flag IN ('true', '1', 'yes', 'problem', 'substantive')
+             AND ($1::text IS NULL OR COALESCE(c.ac_no, ss.ac_no)::text = $1)
+             AND ($2::bigint IS NULL OR COALESCE(c.village_id, ss.village_id) = $2)
+             AND ($3::text IS NULL OR d.district_code::text = $3)
+           ORDER BY c.created_at DESC, c.cid DESC
+           LIMIT 250""",
+        ac_no, village_id, district_code,
+    )
+    issues_list = [
+        {
+            "report_id": row["cid"],
+            "occurred_at": row["created_at"].isoformat() if row["created_at"] else None,
+            "summary": row["summary"],
+            "category": row["category"],
+            "feedback": row["feedback"],
+            "has_problem": True,
+            "ac_no": str(row["ac_no"]) if row["ac_no"] is not None else None,
+            "ac_name": row["ac_name"],
+            "district_code": str(row["district_code"]) if row["district_code"] is not None else None,
+            "district_name": row["district_name"],
+            "village_id": row["village_id"],
+            "village_name": row["village_name"],
+            "contact_name": row["contact_name"],
+            "contact_phone": row["contact_phone"],
+        }
+        for row in issue_rows
+    ]
+
+    # Recent calls feed (increased limit to 100)
+    recent_rows = await pool.fetch(
+        """SELECT c.cid, c.created_at, c.summary, c.category, c.feedback, c.flag,
+                  COALESCE(c.ac_no, ss.ac_no) AS ac_no,
+                  COALESCE(c.village_id, ss.village_id) AS village_id,
+                  a.name AS ac_name,
+                  d.district_code,
+                  d.name AS district_name,
+                  COALESCE(v.name, vb.name, 'Village ' || COALESCE(c.village_id, ss.village_id)) AS village_name,
+                  ss.name AS contact_name,
+                  ss.phone AS contact_phone
+           FROM public.\"call\" c
+           LEFT JOIN sampark_sutra ss ON ss.sid = c.sid
+           LEFT JOIN ac a ON a.ac_no = COALESCE(c.ac_no, ss.ac_no)
+           LEFT JOIN districts d ON d.district_code = a.district_code
+           LEFT JOIN villages v ON v.village_id = COALESCE(c.village_id, ss.village_id)
+           LEFT JOIN LATERAL (
+               SELECT MIN(vb.name) AS name
+               FROM village_boundaries vb
+               WHERE vb.village_id = COALESCE(c.village_id, ss.village_id)
+                 AND vb.ac_no = COALESCE(c.ac_no, ss.ac_no)
+           ) vb ON TRUE
            WHERE ($1::text IS NULL OR COALESCE(c.ac_no, ss.ac_no)::text = $1)
              AND ($2::bigint IS NULL OR COALESCE(c.village_id, ss.village_id) = $2)
+             AND ($3::text IS NULL OR d.district_code::text = $3)
            ORDER BY c.created_at DESC, c.cid DESC
-           LIMIT 30""",
-        ac_no, village_id,
+           LIMIT 100""",
+        ac_no, village_id, district_code,
     )
     recent_list = [
         {
@@ -994,6 +1246,8 @@ async def calling_stats(
             "has_problem": str(row["flag"] or "").lower() in ("true", "1", "yes", "problem", "substantive"),
             "ac_no": str(row["ac_no"]) if row["ac_no"] is not None else None,
             "ac_name": row["ac_name"],
+            "district_code": str(row["district_code"]) if row["district_code"] is not None else None,
+            "district_name": row["district_name"],
             "village_id": row["village_id"],
             "village_name": row["village_name"],
             "contact_name": row["contact_name"],
@@ -1019,4 +1273,5 @@ async def calling_stats(
         "daily_trends": daily_list,
         "ac_breakdown": ac_list,
         "recent_calls": recent_list,
+        "issues": issues_list,
     }

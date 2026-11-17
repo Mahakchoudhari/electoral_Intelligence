@@ -162,8 +162,8 @@ async def log_sutra_audit(
 
 
 async def require_caller(user: dict[str, Any] = Depends(require_user)) -> dict[str, Any]:
-    if user["role"] != "caller":
-        raise HTTPException(status_code=403, detail="Caller account required")
+    if user["role"] not in ("caller", "admin"):
+        raise HTTPException(status_code=403, detail="Caller or Admin account required")
     return user
 
 
@@ -225,15 +225,27 @@ async def list_assemblies(
     pool = get_pool(request)
     if district_code is not None:
         rows = await pool.fetch(
-            """SELECT ac_no, COALESCE(geojson_name, name) AS name, district_code FROM ac
-               WHERE district_code = $1 ORDER BY ac_no""", district_code,
+            """SELECT a.ac_no, COALESCE(a.geojson_name, a.name) AS name, a.district_code, d.name AS district_name
+               FROM ac a
+               LEFT JOIN districts d ON d.district_code = a.district_code
+               WHERE a.district_code = $1 ORDER BY a.ac_no""", district_code,
         )
     else:
         rows = await pool.fetch(
-            """SELECT ac_no, COALESCE(geojson_name, name) AS name, district_code FROM ac
-               ORDER BY name, ac_no"""
+            """SELECT a.ac_no, COALESCE(a.geojson_name, a.name) AS name, a.district_code, d.name AS district_name
+               FROM ac a
+               LEFT JOIN districts d ON d.district_code = a.district_code
+               ORDER BY d.name, a.name, a.ac_no"""
         )
-    return [{"ac_no": row["ac_no"], "name": row["name"], "district_code": row["district_code"]} for row in rows]
+    return [
+        {
+            "ac_no": row["ac_no"],
+            "name": row["name"],
+            "district_code": row["district_code"],
+            "district_name": row["district_name"] or "District",
+        }
+        for row in rows
+    ]
 
 
 @router.get("/villages")
@@ -766,6 +778,7 @@ async def fetch_filtered_admin_calls(
     caller_pid: int | None = None,
     district_code: int | None = None,
     ac_no: int | None = None,
+    ac_nos: list[int] | None = None,
     has_problem: bool | None = None,
     search: str | None = None,
 ) -> list[asyncpg.Record]:
@@ -793,7 +806,11 @@ async def fetch_filtered_admin_calls(
         params.append(district_code)
         idx += 1
 
-    if ac_no is not None:
+    if ac_nos:
+        conditions.append(f"COALESCE(c.ac_no, ss.ac_no) = ANY(${idx}::bigint[])")
+        params.append(ac_nos)
+        idx += 1
+    elif ac_no is not None:
         conditions.append(f"COALESCE(c.ac_no, ss.ac_no) = ${idx}")
         params.append(ac_no)
         idx += 1
@@ -851,14 +868,23 @@ async def admin_activity(
     caller_pid: int | None = None,
     district_code: int | None = None,
     ac_no: int | None = None,
+    ac_nos: str | None = None,
     has_problem: bool | None = None,
     search: str | None = None,
     _: dict[str, Any] = Depends(require_admin),
 ) -> dict[str, Any]:
     pool = get_pool(request)
     callers = await pool.fetch(
-        "SELECT pid, username FROM call_centre_user WHERE role = 'caller' ORDER BY username"
+        "SELECT pid, username FROM call_centre_user ORDER BY username"
     )
+
+    parsed_ac_nos = None
+    if ac_nos and ac_nos.strip():
+        try:
+            parsed_ac_nos = [int(x.strip()) for x in ac_nos.split(",") if x.strip().isdigit()]
+        except ValueError:
+            parsed_ac_nos = None
+
     rows = await fetch_filtered_admin_calls(
         pool=pool,
         date_from=date_from,
@@ -866,6 +892,7 @@ async def admin_activity(
         caller_pid=caller_pid,
         district_code=district_code,
         ac_no=ac_no,
+        ac_nos=parsed_ac_nos,
         has_problem=has_problem,
         search=search,
     )
@@ -1014,6 +1041,51 @@ async def admin_activity(
     active_callers_count = len({r["caller_pid"] for r in rows})
     overall_issue_rate = round((total_issues / total_calls * 100), 1) if total_calls > 0 else 0.0
 
+    # Cross-district Assembly Comparison stats
+    assembly_stats_map: dict[int, dict[str, Any]] = {}
+    for call in all_calls:
+        ac_num = call.get("ac_no")
+        if not ac_num:
+            continue
+        st = assembly_stats_map.setdefault(ac_num, {
+            "ac_no": ac_num,
+            "name": call.get("assembly_name") or f"AC #{ac_num}",
+            "district_name": call.get("district_name") or "District",
+            "district_code": call.get("district_code"),
+            "total_calls": 0,
+            "issues_reported": 0,
+            "clear_calls": 0,
+            "issue_rate_pct": 0.0,
+            "callers": set(),
+            "villages": set(),
+        })
+        st["total_calls"] += 1
+        if call.get("has_problem"):
+            st["issues_reported"] += 1
+        else:
+            st["clear_calls"] += 1
+        if call.get("caller_username"):
+            st["callers"].add(call["caller_username"])
+        if call.get("village_name"):
+            st["villages"].add(call["village_name"])
+
+    assembly_comparison = []
+    for ac_num, st in sorted(assembly_stats_map.items(), key=lambda x: x[1]["total_calls"], reverse=True):
+        tot = st["total_calls"]
+        iss = st["issues_reported"]
+        assembly_comparison.append({
+            "ac_no": ac_num,
+            "name": st["name"],
+            "district_name": st["district_name"],
+            "district_code": st["district_code"],
+            "total_calls": tot,
+            "issues_reported": iss,
+            "clear_calls": st["clear_calls"],
+            "issue_rate_pct": round(100.0 * iss / tot, 1) if tot > 0 else 0.0,
+            "callers": sorted(st["callers"]),
+            "villages_count": len(st["villages"]),
+        })
+
     return {
         "callers": [{"pid": row["pid"], "username": row["username"]} for row in callers],
         "summary": {
@@ -1033,6 +1105,7 @@ async def admin_activity(
         "caller_stats": caller_stats,
         "daily_activity": list(groups.values()),
         "all_calls": all_calls,
+        "assembly_comparison": assembly_comparison,
     }
 
 
@@ -1044,11 +1117,19 @@ async def export_admin_report(
     caller_pid: int | None = None,
     district_code: int | None = None,
     ac_no: int | None = None,
+    ac_nos: str | None = None,
     has_problem: bool | None = None,
     search: str | None = None,
     _: dict[str, Any] = Depends(require_admin),
 ) -> Response:
     pool = get_pool(request)
+    parsed_ac_nos = None
+    if ac_nos and ac_nos.strip():
+        try:
+            parsed_ac_nos = [int(x.strip()) for x in ac_nos.split(",") if x.strip().isdigit()]
+        except ValueError:
+            parsed_ac_nos = None
+
     rows = await fetch_filtered_admin_calls(
         pool=pool,
         date_from=date_from,
@@ -1056,6 +1137,7 @@ async def export_admin_report(
         caller_pid=caller_pid,
         district_code=district_code,
         ac_no=ac_no,
+        ac_nos=parsed_ac_nos,
         has_problem=has_problem,
         search=search,
     )

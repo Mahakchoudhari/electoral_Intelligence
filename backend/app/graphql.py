@@ -52,9 +52,10 @@ class Query:
         village_ids: list[int] | None = None,
         level: str = "state",
         limit: int = 100,
+        only_issues: bool = False,
     ) -> JSON:
         return await data.call_reports(
-            info.context["pool"], state, district_code, ac_no, village_ids, level, limit
+            info.context["pool"], state, district_code, ac_no, village_ids, level, limit, only_issues
         )
 
     @strawberry.field
@@ -113,8 +114,9 @@ class Query:
         info: strawberry.Info,
         ac_no: str | None = None,
         village_id: int | None = None,
+        district_code: str | None = None,
     ) -> JSON:
-        return await data.calling_stats(info.context["pool"], ac_no, village_id)
+        return await data.calling_stats(info.context["pool"], ac_no, village_id, district_code)
 
 
 
