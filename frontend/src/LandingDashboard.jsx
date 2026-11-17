@@ -239,9 +239,17 @@ export default function LandingDashboard({
   const [acVillages, setAcVillages] = useState([]);
   const [loadingPoll, setLoadingPoll] = useState(false);
 
+  // Cross-district AC 2 comparison state
+  const [selectedAC2, setSelectedAC2] = useState("");
+  const [ac2PollData, setAc2PollData] = useState(null);
+  const [ac2CallingData, setAc2CallingData] = useState(null);
+  const [loadingAC2, setLoadingAC2] = useState(false);
+
   const [boothSearch, setBoothSearch] = useState("");
   const [boothTierFilter, setBoothTierFilter] = useState("all");
   const [callFilterProblem, setCallFilterProblem] = useState("all");
+  const [callSearchTerm, setCallSearchTerm] = useState("");
+  const [initialLoaded, setInitialLoaded] = useState(false);
 
   // 1. Load constituencies, calling stats, state-level poll totals, and 16 districts breakdown
   useEffect(() => {
@@ -284,6 +292,7 @@ export default function LandingDashboard({
               if (matched) setSelectedAC(matched.ac_no);
             }
           }
+          setInitialLoaded(true);
         }
       } catch (err) {
         console.error("Initial data load failed:", err);
@@ -296,6 +305,37 @@ export default function LandingDashboard({
       cancelled = true;
     };
   }, [electionYear, initialDistrictCode, initialAC]);
+
+  // Re-fetch calling stats when scope (District, AC, Village) changes
+  useEffect(() => {
+    if (!initialLoaded) return;
+    let cancelled = false;
+    async function loadScopedCalling() {
+      try {
+        const data = await queryGraphQL(
+          `
+          query ScopedCallingStats($acNo: String, $villageId: Int, $districtCode: String) {
+            callingStats(acNo: $acNo, villageId: $villageId, districtCode: $districtCode)
+          }
+        `,
+          {
+            acNo: selectedAC ? String(selectedAC) : null,
+            villageId: selectedVillageId ? Number(selectedVillageId) : null,
+            districtCode: selectedDistrictCode ? String(selectedDistrictCode) : null,
+          }
+        );
+        if (!cancelled && data?.callingStats) {
+          setCallingData(data.callingStats);
+        }
+      } catch (err) {
+        console.error("Calling stats scope load failed:", err);
+      }
+    }
+    loadScopedCalling();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedDistrictCode, selectedAC, selectedVillageId, initialLoaded]);
 
   // Load available election years for current selected AC
   useEffect(() => {
@@ -436,6 +476,45 @@ export default function LandingDashboard({
     };
   }, [selectedAC, electionYear]);
 
+  // 2b. Load AC2 poll results & calling stats when selectedAC2 or electionYear changes
+  useEffect(() => {
+    if (!selectedAC2) {
+      setAc2PollData(null);
+      setAc2CallingData(null);
+      return;
+    }
+    let cancelled = false;
+    async function loadAC2() {
+      try {
+        setLoadingAC2(true);
+        const data = await queryGraphQL(
+          `
+          query AC2Data($acNo: String!, $electionYear: Int) {
+            pollResults(acNo: $acNo, level: "ac", electionYear: $electionYear)
+            callingStats(acNo: $acNo)
+          }
+        `,
+          {
+            acNo: String(selectedAC2),
+            electionYear: electionYear ? Number(electionYear) : null,
+          }
+        );
+        if (!cancelled) {
+          setAc2PollData(data.pollResults || null);
+          setAc2CallingData(data.callingStats || null);
+        }
+      } catch (err) {
+        console.error("AC2 data load failed:", err);
+      } finally {
+        if (!cancelled) setLoadingAC2(false);
+      }
+    }
+    loadAC2();
+    return () => {
+      cancelled = true;
+    };
+  }, [selectedAC2, electionYear]);
+
   const activeACInfo = useMemo(() => {
     return (
       constituencies.find((c) => c.ac_no === String(selectedAC)) || {
@@ -517,6 +596,59 @@ export default function LandingDashboard({
     });
     return counts;
   }, [allBoothsWithTier]);
+
+  const activeAC2Info = useMemo(() => {
+    if (!selectedAC2) return null;
+    return (
+      constituencies.find((c) => String(c.ac_no) === String(selectedAC2)) || {
+        ac_no: selectedAC2,
+        name: `AC ${selectedAC2}`,
+        district_name: "Uttar Pradesh",
+        district_code: "",
+        booth_count: ac2PollData?.booth_records || 0,
+      }
+    );
+  }, [constituencies, selectedAC2, ac2PollData]);
+
+  const ac2BoothsWithTier = useMemo(() => {
+    const rawBooths = ac2PollData?.booths || [];
+    return rawBooths.map((b) => {
+      const pVotes = b.party_votes || [];
+      const rldObj = pVotes.find((p) => p.party === "RLD");
+      const vsObj = vsParty !== "all" ? pVotes.find((p) => p.party === vsParty) : null;
+      const rldVotes = rldObj?.votes || 0;
+      const vsVotes = vsObj?.votes || 0;
+
+      let targetShare = 0;
+      if (vsParty && vsParty !== "all") {
+        const pool2 = rldVotes + vsVotes;
+        targetShare = pool2 > 0 ? (rldVotes / pool2) * 100 : (rldObj?.share_percent ?? 0);
+      } else {
+        targetShare = rldObj?.share_percent ?? 0;
+      }
+
+      const tierObj = getTier(targetShare);
+      return {
+        ...b,
+        rldVotes,
+        vsVotes,
+        vsPartyName: vsParty,
+        targetPartyShare: targetShare,
+        tier: tierObj.tier,
+        tierName: tierObj.name,
+        tierColor: tierObj.color,
+      };
+    });
+  }, [ac2PollData, vsParty, thresholds]);
+
+  const ac2TierCounts = useMemo(() => {
+    const counts = { red: 0, amber: 0, yellow: 0, green: 0, total: 0 };
+    ac2BoothsWithTier.forEach((b) => {
+      if (counts[b.tier] !== undefined) counts[b.tier]++;
+      counts.total++;
+    });
+    return counts;
+  }, [ac2BoothsWithTier]);
 
   const computeVillageData = (vId) => {
     if (!vId) return null;
@@ -601,11 +733,47 @@ export default function LandingDashboard({
   }, [activeBoothsForTable, boothTierFilter, boothSearch]);
 
   const filteredRecentCalls = useMemo(() => {
-    const list = callingData?.recent_calls || [];
-    if (callFilterProblem === "problem") return list.filter((c) => c.has_problem);
-    if (callFilterProblem === "clear") return list.filter((c) => !c.has_problem);
+    let list;
+    if (callFilterProblem === "problem") {
+      list = (callingData?.issues && callingData.issues.length > 0)
+        ? callingData.issues
+        : (callingData?.recent_calls || []).filter((c) => c.has_problem);
+    } else if (callFilterProblem === "clear") {
+      list = (callingData?.recent_calls || []).filter((c) => !c.has_problem);
+    } else {
+      // "all": combine recent_calls and issues to ensure all issues appear in the feed
+      const recent = callingData?.recent_calls || [];
+      const issues = callingData?.issues || [];
+      const seen = new Set();
+      list = [];
+      for (const item of [...issues, ...recent]) {
+        if (!seen.has(item.report_id)) {
+          seen.add(item.report_id);
+          list.push(item);
+        }
+      }
+      list.sort((a, b) => {
+        const ta = a.occurred_at ? new Date(a.occurred_at).getTime() : 0;
+        const tb = b.occurred_at ? new Date(b.occurred_at).getTime() : 0;
+        return tb - ta;
+      });
+    }
+
+    if (callSearchTerm.trim()) {
+      const q = callSearchTerm.toLowerCase().trim();
+      list = list.filter((c) => {
+        const contactMatch = String(c.contact_name || "").toLowerCase().includes(q);
+        const phoneMatch = String(c.contact_phone || "").toLowerCase().includes(q);
+        const villageMatch = String(c.village_name || "").toLowerCase().includes(q);
+        const acMatch = String(c.ac_name || "").toLowerCase().includes(q) || String(c.ac_no || "").includes(q);
+        const feedbackMatch = String(c.feedback || "").toLowerCase().includes(q);
+        const summaryMatch = String(c.summary || "").toLowerCase().includes(q);
+        return contactMatch || phoneMatch || villageMatch || acMatch || feedbackMatch || summaryMatch;
+      });
+    }
+
     return list;
-  }, [callingData, callFilterProblem]);
+  }, [callingData, callFilterProblem, callSearchTerm]);
 
   // Global search matching (Districts, ACs, and current villages)
   const searchResults = useMemo(() => {
@@ -758,7 +926,7 @@ export default function LandingDashboard({
             </div>
             <div className="kpi-text-wrap">
               <span className="kpi-label">Calls Logged</span>
-              <span className="kpi-value">{callingData?.overall?.total_calls ?? 54}</span>
+              <span className="kpi-value">{formatNumber(callingData?.filtered?.total_calls ?? callingData?.overall?.total_calls ?? 3419)}</span>
             </div>
           </div>
 
@@ -769,20 +937,32 @@ export default function LandingDashboard({
             <div className="kpi-text-wrap">
               <span className="kpi-label">Clear Calls</span>
               <span className="kpi-value">
-                {callingData?.overall
+                {callingData?.filtered
+                  ? formatPercent(100 - (callingData.filtered.issue_rate_percent || 0))
+                  : callingData?.overall
                   ? formatPercent(100 - (callingData.overall.issue_rate_percent || 0))
-                  : "96.3%"}
+                  : "97.3%"}
               </span>
             </div>
           </div>
 
-          <div className="kpi-mini-card">
+          <div
+            className="kpi-mini-card"
+            style={{ cursor: "pointer", transition: "transform 0.15s ease, border-color 0.15s ease" }}
+            onClick={() => {
+              setCallFilterProblem("problem");
+              document.getElementById("live-activity-section")?.scrollIntoView({ behavior: "smooth" });
+            }}
+            title="Click to view all reported issues below"
+          >
             <div className="kpi-icon-wrap" style={{ color: "#ef4444" }}>
               <IconAlertTriangle size={18} />
             </div>
             <div className="kpi-text-wrap">
               <span className="kpi-label">Issues Reported</span>
-              <span className="kpi-value">{callingData?.overall?.issues_reported ?? 2}</span>
+              <span className="kpi-value" style={{ color: "#ef4444" }}>
+                {callingData?.filtered?.issues_reported ?? callingData?.overall?.issues_reported ?? 93}
+              </span>
             </div>
           </div>
         </section>
@@ -809,30 +989,76 @@ export default function LandingDashboard({
               </select>
             </div>
 
-            {/* 2. AC Dropdown (Filtered to Selected District) */}
+            {/* 2. AC Dropdown (Cross-District Support) */}
             <div className="filter-item">
               <label className="filter-label">
-                <IconAssembly size={13} /> AC
+                <IconAssembly size={13} /> AC 1 {selectedDistrictCode ? "(In District)" : "(All)"}
               </label>
               <select
                 className="custom-select"
                 value={selectedAC}
-                disabled={!selectedDistrictCode}
                 onChange={(e) => {
-                  setSelectedAC(e.target.value);
+                  const val = e.target.value;
+                  setSelectedAC(val);
                   setSelectedVillageId("");
                   setSelectedVillage2Id("");
+                  const chosen = constituencies.find((c) => String(c.ac_no) === String(val));
+                  if (chosen && chosen.district_code && chosen.district_code !== selectedDistrictCode) {
+                    setSelectedDistrictCode(chosen.district_code);
+                  }
                 }}
               >
                 {!selectedDistrictCode ? (
-                  <option value="">— Pick District First —</option>
+                  <>
+                    <option value="">— Pick AC across UP ({constituencies.length}) —</option>
+                    {constituencies.map((c) => (
+                      <option key={c.ac_no} value={c.ac_no}>
+                        {c.district_name ? `[${c.district_name}] ` : ""}AC {c.ac_no} - {c.name}
+                      </option>
+                    ))}
+                  </>
                 ) : (
-                  filteredACs.map((c) => (
-                    <option key={c.ac_no} value={c.ac_no}>
-                      {c.ac_no} - {c.name} {c.booth_count > 0 ? `(${formatNumber(c.booth_count)})` : ""}
-                    </option>
-                  ))
+                  <>
+                    <optgroup label={`In Selected District (${filteredACs.length})`}>
+                      {filteredACs.map((c) => (
+                        <option key={c.ac_no} value={c.ac_no}>
+                          AC {c.ac_no} - {c.name} {c.booth_count > 0 ? `(${formatNumber(c.booth_count)})` : ""}
+                        </option>
+                      ))}
+                    </optgroup>
+                    <optgroup label="Other Districts">
+                      {constituencies
+                        .filter((c) => c.district_code !== selectedDistrictCode)
+                        .map((c) => (
+                          <option key={c.ac_no} value={c.ac_no}>
+                            [{c.district_name || "UP"}] AC {c.ac_no} - {c.name}
+                          </option>
+                        ))}
+                    </optgroup>
+                  </>
                 )}
+              </select>
+            </div>
+
+            {/* 2b. AC 2 Dropdown (Compare across any district) */}
+            <div className="filter-item">
+              <label className="filter-label" style={{ color: "#a855f7" }}>
+                <IconAssembly size={13} /> AC 2 (Compare Across Districts)
+              </label>
+              <select
+                className="custom-select"
+                value={selectedAC2}
+                onChange={(e) => setSelectedAC2(e.target.value)}
+                style={{ borderColor: selectedAC2 ? "#a855f7" : undefined }}
+              >
+                <option value="">— Select AC 2 to Compare —</option>
+                {constituencies
+                  .filter((c) => String(c.ac_no) !== String(selectedAC))
+                  .map((c) => (
+                    <option key={c.ac_no} value={c.ac_no}>
+                      {c.district_name ? `[${c.district_name}] ` : ""}AC {c.ac_no} - {c.name}
+                    </option>
+                  ))}
               </select>
             </div>
 
@@ -1210,10 +1436,229 @@ export default function LandingDashboard({
                 </button>
               </div>
 
+              {/* Cross-District Assembly Constituency Comparison Banner/Card */}
+              {selectedAC2 && activeAC2Info && (
+                <div className="ac-comparison-section">
+                  <div className="section-head" style={{ marginBottom: "12px", borderBottom: "1px solid rgba(255,255,255,0.06)", paddingBottom: "10px" }}>
+                    <div className="section-title-wrap">
+                      <span className="demarcation-scope-tag" style={{ color: "#a855f7", borderColor: "rgba(168, 85, 247, 0.4)" }}>
+                        CROSS-DISTRICT CONSTITUENCY BENCHMARKING
+                      </span>
+                      <h2 style={{ fontSize: "16px", margin: "4px 0" }}>
+                        <IconAssembly size={16} /> AC Comparison: {activeACInfo.name} (#{activeACInfo.ac_no}) vs {activeAC2Info.name} (#{activeAC2Info.ac_no})
+                      </h2>
+                      <p className="section-desc" style={{ fontSize: "12px", color: "var(--landing-text-subtle)", margin: 0 }}>
+                        Side-by-side electoral turnout, RLD performance, booth demarcation, and caller outreach metrics across districts.
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      className="village-clear-btn"
+                      onClick={() => setSelectedAC2("")}
+                      title="Clear AC 2 Comparison"
+                    >
+                      <span>Close Comparison</span>
+                      <IconX size={12} />
+                    </button>
+                  </div>
 
-          <div className="demarcation-grid">
-            {/* Whole Constituency Card */}
-            <div className="demarcation-card">
+                  <div className="ac-comparison-cards-grid">
+                    {/* AC 1 Comparison Card */}
+                    <div className="ac-compare-card primary">
+                      <div className="ac-compare-card-head">
+                        <div>
+                          <span className="ac-compare-tag primary">AC 1 ({activeACInfo.district_name})</span>
+                          <h3 style={{ margin: "2px 0 0 0", fontSize: "15px", color: "#fff" }}>{activeACInfo.name} (#{activeACInfo.ac_no})</h3>
+                        </div>
+                        <button
+                          type="button"
+                          className="village-gis-btn"
+                          onClick={() => onOpenGIS(selectedAC, "", electionYear, selectedDistrictCode)}
+                          title="Open AC 1 in GIS Dashboard"
+                        >
+                          <IconMap size={11} />
+                          <span>Open in GIS ↗</span>
+                        </button>
+                      </div>
+
+                      <div className="ac-compare-metrics-table">
+                        <div className="compare-row">
+                          <span className="compare-metric-name">District</span>
+                          <strong className="compare-val">{activeACInfo.district_name}</strong>
+                        </div>
+                        <div className="compare-row">
+                          <span className="compare-metric-name">Electors</span>
+                          <strong className="compare-val">{formatNumber(acPollData?.electors)}</strong>
+                        </div>
+                        <div className="compare-row">
+                          <span className="compare-metric-name">Votes Polled</span>
+                          <strong className="compare-val">{formatNumber(acPollData?.votes_polled)}</strong>
+                        </div>
+                        <div className="compare-row">
+                          <span className="compare-metric-name">Turnout</span>
+                          <strong className="compare-val" style={{ color: "#38bdf8" }}>
+                            {acPollData?.electors && acPollData?.votes_polled
+                              ? formatPercent((acPollData.votes_polled / acPollData.electors) * 100)
+                              : "—"}
+                          </strong>
+                        </div>
+                        <div className="compare-row">
+                          <span className="compare-metric-name">Total Booths</span>
+                          <strong className="compare-val">{formatNumber(constituencyTierCounts.total)}</strong>
+                        </div>
+                        <div className="compare-row">
+                          <span className="compare-metric-name">RLD Votes</span>
+                          <strong className="compare-val" style={{ color: "#22c55e" }}>
+                            {formatNumber(acPollData?.party_votes?.find((p) => p.party === "RLD")?.votes || 0)} (
+                            {formatPercent(acPollData?.party_votes?.find((p) => p.party === "RLD")?.share_percent || 0)})
+                          </strong>
+                        </div>
+                        <div className="compare-row">
+                          <span className="compare-metric-name">{vsParty !== "all" ? `${vsParty} Votes` : "Top Opponent"}</span>
+                          <strong className="compare-val" style={{ color: "#f97316" }}>
+                            {formatNumber(acPollData?.party_votes?.find((p) => p.party === (vsParty !== "all" ? vsParty : "BJP"))?.votes || 0)} (
+                            {formatPercent(acPollData?.party_votes?.find((p) => p.party === (vsParty !== "all" ? vsParty : "BJP"))?.share_percent || 0)})
+                          </strong>
+                        </div>
+                        <div className="compare-row">
+                          <span className="compare-metric-name">Calls Logged</span>
+                          <strong className="compare-val">{formatNumber(callingData?.filtered?.total_calls ?? callingData?.overall?.total_calls ?? 0)}</strong>
+                        </div>
+                        <div className="compare-row">
+                          <span className="compare-metric-name">Issues Reported</span>
+                          <strong className="compare-val" style={{ color: "#f87171" }}>
+                            {formatNumber(callingData?.filtered?.issues_reported ?? callingData?.overall?.issues_reported ?? 0)} (
+                            {formatPercent(callingData?.filtered?.issue_rate_percent ?? callingData?.overall?.issue_rate_percent ?? 0)})
+                          </strong>
+                        </div>
+                      </div>
+
+                      {/* Booth Tier Breakdown */}
+                      <div className="ac-compare-tier-boxes">
+                        <div className="tier-stat-box red">
+                          <span className="tier-box-label">Red</span>
+                          <span className="tier-box-count">{constituencyTierCounts.red}</span>
+                        </div>
+                        <div className="tier-stat-box amber">
+                          <span className="tier-box-label">Amber</span>
+                          <span className="tier-box-count">{constituencyTierCounts.amber}</span>
+                        </div>
+                        <div className="tier-stat-box yellow">
+                          <span className="tier-box-label">Yellow</span>
+                          <span className="tier-box-count">{constituencyTierCounts.yellow}</span>
+                        </div>
+                        <div className="tier-stat-box green">
+                          <span className="tier-box-label">Green</span>
+                          <span className="tier-box-count">{constituencyTierCounts.green}</span>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* AC 2 Comparison Card */}
+                    <div className="ac-compare-card secondary">
+                      <div className="ac-compare-card-head">
+                        <div>
+                          <span className="ac-compare-tag secondary">AC 2 ({activeAC2Info.district_name})</span>
+                          <h3 style={{ margin: "2px 0 0 0", fontSize: "15px", color: "#fff" }}>{activeAC2Info.name} (#{activeAC2Info.ac_no})</h3>
+                        </div>
+                        <button
+                          type="button"
+                          className="village-gis-btn"
+                          onClick={() => onOpenGIS(selectedAC2, "", electionYear, activeAC2Info.district_code)}
+                          title="Open AC 2 in GIS Dashboard"
+                        >
+                          <IconMap size={11} />
+                          <span>Open in GIS ↗</span>
+                        </button>
+                      </div>
+
+                      {loadingAC2 ? (
+                        <div style={{ padding: "40px 20px", textAlign: "center", color: "#94a3b8" }}>
+                          Loading AC #{selectedAC2} intelligence data…
+                        </div>
+                      ) : (
+                        <>
+                          <div className="ac-compare-metrics-table">
+                            <div className="compare-row">
+                              <span className="compare-metric-name">District</span>
+                              <strong className="compare-val">{activeAC2Info.district_name}</strong>
+                            </div>
+                            <div className="compare-row">
+                              <span className="compare-metric-name">Electors</span>
+                              <strong className="compare-val">{formatNumber(ac2PollData?.electors)}</strong>
+                            </div>
+                            <div className="compare-row">
+                              <span className="compare-metric-name">Votes Polled</span>
+                              <strong className="compare-val">{formatNumber(ac2PollData?.votes_polled)}</strong>
+                            </div>
+                            <div className="compare-row">
+                              <span className="compare-metric-name">Turnout</span>
+                              <strong className="compare-val" style={{ color: "#38bdf8" }}>
+                                {ac2PollData?.electors && ac2PollData?.votes_polled
+                                  ? formatPercent((ac2PollData.votes_polled / ac2PollData.electors) * 100)
+                                  : "—"}
+                              </strong>
+                            </div>
+                            <div className="compare-row">
+                              <span className="compare-metric-name">Total Booths</span>
+                              <strong className="compare-val">{formatNumber(ac2TierCounts.total)}</strong>
+                            </div>
+                            <div className="compare-row">
+                              <span className="compare-metric-name">RLD Votes</span>
+                              <strong className="compare-val" style={{ color: "#22c55e" }}>
+                                {formatNumber(ac2PollData?.party_votes?.find((p) => p.party === "RLD")?.votes || 0)} (
+                                {formatPercent(ac2PollData?.party_votes?.find((p) => p.party === "RLD")?.share_percent || 0)})
+                              </strong>
+                            </div>
+                            <div className="compare-row">
+                              <span className="compare-metric-name">{vsParty !== "all" ? `${vsParty} Votes` : "Top Opponent"}</span>
+                              <strong className="compare-val" style={{ color: "#f97316" }}>
+                                {formatNumber(ac2PollData?.party_votes?.find((p) => p.party === (vsParty !== "all" ? vsParty : "BJP"))?.votes || 0)} (
+                                {formatPercent(ac2PollData?.party_votes?.find((p) => p.party === (vsParty !== "all" ? vsParty : "BJP"))?.share_percent || 0)})
+                              </strong>
+                            </div>
+                            <div className="compare-row">
+                              <span className="compare-metric-name">Calls Logged</span>
+                              <strong className="compare-val">{formatNumber(ac2CallingData?.overall?.total_calls ?? 0)}</strong>
+                            </div>
+                            <div className="compare-row">
+                              <span className="compare-metric-name">Issues Reported</span>
+                              <strong className="compare-val" style={{ color: "#f87171" }}>
+                                {formatNumber(ac2CallingData?.overall?.issues_reported ?? 0)} (
+                                {formatPercent(ac2CallingData?.overall?.issue_rate_percent ?? 0)})
+                              </strong>
+                            </div>
+                          </div>
+
+                          {/* Booth Tier Breakdown */}
+                          <div className="ac-compare-tier-boxes">
+                            <div className="tier-stat-box red">
+                              <span className="tier-box-label">Red</span>
+                              <span className="tier-box-count">{ac2TierCounts.red}</span>
+                            </div>
+                            <div className="tier-stat-box amber">
+                              <span className="tier-box-label">Amber</span>
+                              <span className="tier-box-count">{ac2TierCounts.amber}</span>
+                            </div>
+                            <div className="tier-stat-box yellow">
+                              <span className="tier-box-label">Yellow</span>
+                              <span className="tier-box-count">{ac2TierCounts.yellow}</span>
+                            </div>
+                            <div className="tier-stat-box green">
+                              <span className="tier-box-label">Green</span>
+                              <span className="tier-box-count">{ac2TierCounts.green}</span>
+                            </div>
+                          </div>
+                        </>
+                      )}
+                    </div>
+                  </div>
+                </div>
+              )}
+
+              <div className="demarcation-grid">
+                {/* Whole Constituency Card */}
+                <div className="demarcation-card">
               <div className="demarcation-card-header">
                 <div>
                   <span className="demarcation-scope-tag">CONSTITUENCY</span>
@@ -1948,44 +2393,56 @@ export default function LandingDashboard({
           </div>
 
           {/* Recent Live Call Feed */}
-          <div className="calling-subcard">
+          <div className="calling-subcard" id="live-activity-section">
             <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", flexWrap: "wrap", gap: "8px" }}>
               <h4>
                 <IconZap size={14} /> Live Activity
               </h4>
-              <div style={{ display: "flex", gap: "4px" }}>
+              <div style={{ display: "flex", gap: "4px", alignItems: "center" }}>
                 <button
                   type="button"
                   className={`tier-tab-btn ${callFilterProblem === "all" ? "active" : ""}`}
                   onClick={() => setCallFilterProblem("all")}
                 >
-                  All ({callingData?.recent_calls?.length || 0})
+                  All ({filteredRecentCalls.length})
                 </button>
                 <button
                   type="button"
                   className={`tier-tab-btn ${callFilterProblem === "problem" ? "active" : ""}`}
+                  style={callFilterProblem === "problem" ? { borderColor: "#ef4444", color: "#ef4444" } : {}}
                   onClick={() => setCallFilterProblem("problem")}
                 >
-                  Issues
+                  Issues ({callingData?.filtered?.issues_reported ?? callingData?.overall?.issues_reported ?? callingData?.issues?.length ?? 93})
                 </button>
                 <button
                   type="button"
                   className={`tier-tab-btn ${callFilterProblem === "clear" ? "active" : ""}`}
                   onClick={() => setCallFilterProblem("clear")}
                 >
-                  Clear
+                  Clear ({callingData?.filtered?.clear_calls ?? callingData?.overall?.clear_calls ?? 0})
                 </button>
               </div>
+            </div>
+
+            {/* Quick search input in Live Activity feed */}
+            <div style={{ marginTop: "10px", marginBottom: "8px" }}>
+              <input
+                type="text"
+                className="call-feed-search-input"
+                placeholder="Search issues, remarks (e.g. wrong number, switch off), contacts, villages, ACs..."
+                value={callSearchTerm}
+                onChange={(e) => setCallSearchTerm(e.target.value)}
+              />
             </div>
 
             <div className="recent-calls-feed">
               {filteredRecentCalls.length === 0 ? (
                 <div style={{ padding: "16px", textAlign: "center", color: "#64748b" }}>
-                  No call records found.
+                  {callFilterProblem === "problem" ? "No issue records found for current selection." : "No call records found."}
                 </div>
               ) : (
                 filteredRecentCalls.map((c) => (
-                  <div key={c.report_id} className="call-item-card">
+                  <div key={c.report_id} className={`call-item-card ${c.has_problem ? "issue-card" : ""}`}>
                     <div className="call-item-header">
                       <div className="call-contact-info">
                         <IconUser size={12} />
@@ -1995,7 +2452,7 @@ export default function LandingDashboard({
                       <span className={`call-status-pill ${c.has_problem ? "issue" : "clear"}`}>
                         {c.has_problem ? (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
-                            <IconAlertTriangle size={11} /> Issue
+                            <IconAlertTriangle size={11} /> Issue Reported
                           </span>
                         ) : (
                           <span style={{ display: "inline-flex", alignItems: "center", gap: "3px" }}>
@@ -2006,23 +2463,38 @@ export default function LandingDashboard({
                     </div>
 
                     <div className="call-item-body">
-                      {c.summary || "Profile verified"}
+                      <div className="call-summary-line">{c.summary || "Profile verified"}</div>
                       {c.feedback && (
-                        <div style={{ marginTop: "2px", fontSize: "11px", color: "#94a3b8" }}>
-                          <em>{c.feedback}</em>
+                        <div className={`call-remark-container ${c.has_problem ? "issue-remark" : ""}`}>
+                          <span className="call-remark-label">{c.has_problem ? "⚠️ Field Remark:" : "💬 Note:"}</span>
+                          <span className="call-remark-content">{c.feedback}</span>
                         </div>
                       )}
                     </div>
 
-                    <div className="call-item-meta">
-                      <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
-                        <IconPin size={10} />
-                        {[c.village_name, c.ac_name].filter(Boolean).join(" • ")}
-                      </span>
-                      <span>{c.category || "Profile & Info"}</span>
-                      <span>
-                        {c.occurred_at ? new Date(c.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
-                      </span>
+                    <div className="call-item-meta" style={{ display: "flex", justifyContent: "space-between", alignItems: "center", flexWrap: "wrap", gap: "6px" }}>
+                      <div style={{ display: "flex", gap: "10px", alignItems: "center", flexWrap: "wrap" }}>
+                        <span style={{ display: "flex", alignItems: "center", gap: "3px" }}>
+                          <IconPin size={10} />
+                          {[c.village_name, c.ac_name ? (c.ac_name.startsWith("AC") ? c.ac_name : `AC ${c.ac_no} - ${c.ac_name}`) : (c.ac_no ? `AC ${c.ac_no}` : null), c.district_name].filter(Boolean).join(" • ")}
+                        </span>
+                        <span>{c.category || "Profile & Info"}</span>
+                        <span>
+                          {c.occurred_at ? new Date(c.occurred_at).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }) : ""}
+                        </span>
+                      </div>
+                      {c.ac_no && (
+                        <button
+                          type="button"
+                          className="call-map-to-gis-btn"
+                          onClick={() => onOpenGIS(c.ac_no, c.village_id || c.village_name, electionYear, c.district_code)}
+                          title={`Open Village GIS map for ${c.village_name || `AC ${c.ac_no}`}`}
+                        >
+                          <IconMap size={11} />
+                          <span>Map to Village GIS</span>
+                          <span>→</span>
+                        </button>
+                      )}
                     </div>
                   </div>
                 ))

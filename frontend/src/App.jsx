@@ -589,9 +589,16 @@ function AssemblyDashboard({
   tierFilter,
   setTierFilter,
   tierCounts,
+  featureIssues,
 }) {
   const [expandedBooths, setExpandedBooths] = useState({});
   const [boothSearch, setBoothSearch] = useState("");
+
+  const issuesList = useMemo(() => {
+    if (data?.issues && data.issues.length > 0) return data.issues;
+    if (featureIssues && featureIssues.length > 0) return featureIssues;
+    return [];
+  }, [data?.issues, featureIssues]);
 
   const toggleBooth = (boothId) => {
     setExpandedBooths((prev) => ({
@@ -915,9 +922,59 @@ function AssemblyDashboard({
           </section>
         )}
 
+        {/* Section 06: REPORTED ISSUES & FIELD REMARKS */}
+        <section className="dashboard-section">
+          <div className="dashboard-section-title">
+            06 · REPORTED ISSUES & FIELD REMARKS {issuesList.length > 0 ? `(${issuesList.length})` : "(0)"}
+          </div>
+          {issuesList.length > 0 ? (
+            <div className="gis-issues-list" style={{ display: "flex", flexDirection: "column", gap: "8px", marginTop: "8px" }}>
+              {issuesList.map((iss) => (
+                <div key={iss.report_id} className="gis-issue-card" style={{ background: "rgba(239, 68, 68, 0.05)", border: "1px solid rgba(239, 68, 68, 0.25)", borderRadius: "8px", padding: "10px 12px" }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "4px" }}>
+                    <div style={{ fontSize: "12px", fontWeight: "700", color: "#f8fafc" }}>
+                      👤 {iss.contact_name || "Contact"}
+                      {iss.contact_phone && (
+                        <span style={{ marginLeft: "6px", fontFamily: "monospace", fontSize: "11px", background: "rgba(0,0,0,0.3)", padding: "1px 5px", borderRadius: "3px", color: "#94a3b8" }}>
+                          {iss.contact_phone}
+                        </span>
+                      )}
+                    </div>
+                    <span style={{ fontSize: "10.5px", fontWeight: "700", background: "rgba(239, 68, 68, 0.15)", color: "#f87171", border: "1px solid rgba(239, 68, 68, 0.3)", padding: "2px 6px", borderRadius: "4px" }}>
+                      ⚠️ Issue Reported
+                    </span>
+                  </div>
+                  <div style={{ fontSize: "11px", color: "#94a3b8", marginBottom: "4px" }}>
+                    📍 {[iss.village_name, iss.ac_name].filter(Boolean).join(" • ")}
+                  </div>
+                  <div style={{ fontSize: "12px", color: "#e2e8f0", marginBottom: "6px" }}>
+                    {iss.summary || "Roster feedback logged"}
+                  </div>
+                  {iss.feedback && (
+                    <div style={{ background: "rgba(239, 68, 68, 0.12)", borderLeft: "3px solid #ef4444", borderRadius: "3px", padding: "6px 8px", fontSize: "11.5px" }}>
+                      <span style={{ color: "#f87171", fontWeight: "700", marginRight: "5px" }}>💬 Field Remark:</span>
+                      <span style={{ color: "#fef2f2", fontStyle: "italic" }}>{iss.feedback}</span>
+                    </div>
+                  )}
+                  {iss.occurred_at && (
+                    <div style={{ fontSize: "10.5px", color: "#64748b", marginTop: "6px", textAlign: "right" }}>
+                      {new Date(iss.occurred_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}
+                    </div>
+                  )}
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div style={{ padding: "12px", background: "rgba(34, 197, 94, 0.05)", border: "1px solid rgba(34, 197, 94, 0.2)", borderRadius: "6px", display: "flex", alignItems: "center", gap: "8px", color: "#86efac", fontSize: "12px" }}>
+              <span style={{ color: "#22c55e", fontSize: "16px" }}>✓</span>
+              <span>No telephony issues reported for this area. All calls clear / verified.</span>
+            </div>
+          )}
+        </section>
+
         <div className="dashboard-source">
           <span className="source-dot" />
-          Results aggregated from election booths and booth results
+          Results aggregated from election booths, booth results, and call intelligence
         </div>
       </div>
     </div>
@@ -925,32 +982,87 @@ function AssemblyDashboard({
 }
 
 function CallReportsPanel({ reports, loading, error, title, onClose }) {
+  const [reportFilter, setReportFilter] = useState("issues");
+
+  const issueCount = useMemo(() => reports.filter((r) => r.has_problem).length, [reports]);
+  const clearCount = useMemo(() => reports.filter((r) => !r.has_problem).length, [reports]);
+
+  const filteredReports = useMemo(() => {
+    if (reportFilter === "issues") return reports.filter((r) => r.has_problem);
+    if (reportFilter === "clear") return reports.filter((r) => !r.has_problem);
+    return reports;
+  }, [reports, reportFilter]);
+
   return (
     <section className="call-reports-panel" aria-label="Call reports">
       <header className="call-reports-header">
         <div>
-          <div className="dashboard-eyebrow">CALL REPORTS</div>
+          <div className="dashboard-eyebrow">CALL REPORTS & REMARKS</div>
           <h2>{title}</h2>
           <p>Newest caller updates first · refreshes every 10 seconds</p>
         </div>
         <button type="button" className="dashboard-close" onClick={onClose} aria-label="Close call reports">×</button>
       </header>
+
+      {/* Filter Tabs */}
+      <div style={{ display: "flex", gap: "6px", padding: "10px 16px", background: "rgba(0,0,0,0.25)", borderBottom: "1px solid rgba(255,255,255,0.06)" }}>
+        <button
+          type="button"
+          className={`tier-tab-btn ${reportFilter === "issues" ? "active" : ""}`}
+          style={reportFilter === "issues" ? { borderColor: "#ef4444", color: "#ef4444" } : {}}
+          onClick={() => setReportFilter("issues")}
+        >
+          Issues ({issueCount})
+        </button>
+        <button
+          type="button"
+          className={`tier-tab-btn ${reportFilter === "all" ? "active" : ""}`}
+          onClick={() => setReportFilter("all")}
+        >
+          All ({reports.length})
+        </button>
+        <button
+          type="button"
+          className={`tier-tab-btn ${reportFilter === "clear" ? "active" : ""}`}
+          onClick={() => setReportFilter("clear")}
+        >
+          Clear ({clearCount})
+        </button>
+      </div>
+
       <div className="call-reports-list">
         {loading ? <div className="call-reports-empty">Loading reports…</div> : error ? (
           <div className="call-reports-error" role="alert">Could not load call reports: {error}</div>
-        ) : reports.length ? reports.map((report) => (
-          <article className="call-report-card" key={report.report_id}>
+        ) : filteredReports.length ? filteredReports.map((report) => (
+          <article className={`call-report-card ${report.has_problem ? "issue-report" : ""}`} key={report.report_id} style={report.has_problem ? { borderColor: "rgba(239, 68, 68, 0.35)", background: "rgba(239, 68, 68, 0.04)" } : {}}>
             <div className="call-report-meta">
-              <time dateTime={report.occurred_at}>{new Date(report.occurred_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" })}</time>
-              {report.category && <span>{report.category}</span>}
+              <time dateTime={report.occurred_at}>
+                {report.occurred_at ? new Date(report.occurred_at).toLocaleString("en-IN", { dateStyle: "medium", timeStyle: "short" }) : ""}
+              </time>
+              <div style={{ display: "flex", gap: "6px", alignItems: "center" }}>
+                {report.category && <span>{report.category}</span>}
+                <span className={`call-status-pill ${report.has_problem ? "issue" : "clear"}`} style={{ fontSize: "10px", fontWeight: "700", padding: "1px 5px", borderRadius: "3px", background: report.has_problem ? "rgba(239, 68, 68, 0.2)" : "rgba(34, 197, 94, 0.2)", color: report.has_problem ? "#f87171" : "#4ade80" }}>
+                  {report.has_problem ? "⚠️ Issue" : "✓ Clear"}
+                </span>
+              </div>
             </div>
-            {(report.area || report.district) && <div className="call-report-area">{[report.area, report.district].filter(Boolean).join(" · ")}</div>}
-            <p>{report.issue || "No issue reported"}</p>
-            {report.feedback && <div className="call-report-caller">Feedback: {report.feedback}</div>}
+            {report.contact_name && (
+              <div style={{ fontSize: "12px", fontWeight: "600", color: "#f8fafc", marginTop: "4px" }}>
+                👤 {report.contact_name} {report.contact_phone && <span style={{ marginLeft: "4px", fontFamily: "monospace", fontSize: "11px", color: "#94a3b8" }}>({report.contact_phone})</span>}
+              </div>
+            )}
+            {(report.area || report.district) && <div className="call-report-area">📍 {[report.area, report.district].filter(Boolean).join(" · ")}</div>}
+            <p style={{ marginTop: "4px", fontSize: "12px", color: "#cbd5e1" }}>{report.issue || "Roster conversation logged"}</p>
+            {report.feedback && (
+              <div className="call-report-feedback-box" style={{ marginTop: "6px", padding: "6px 8px", background: "rgba(239, 68, 68, 0.12)", borderLeft: "3px solid #ef4444", borderRadius: "3px", fontSize: "11.5px" }}>
+                <span style={{ color: "#f87171", fontWeight: "700", marginRight: "4px" }}>💬 Field Remark:</span>
+                <span style={{ color: "#fef2f2", fontStyle: "italic" }}>{report.feedback}</span>
+              </div>
+            )}
           </article>
-        )) : <div className="call-reports-empty">No call reports for this area yet.</div>}
+        )) : <div className="call-reports-empty">No {reportFilter === "issues" ? "issue reports" : "call reports"} for this area yet.</div>}
       </div>
-      {!loading && !error && reports.length === 100 && <footer className="call-reports-footer">Showing the latest 100 reports.</footer>}
+      {!loading && !error && filteredReports.length === 100 && <footer className="call-reports-footer">Showing the latest 100 reports.</footer>}
     </section>
   );
 }
@@ -1413,7 +1525,8 @@ export default function App() {
       const updatedFeature = villages.features.find((f) => {
         const vName = String(getVillageName(f) || "").trim().toLowerCase();
         const vId = String(f.properties?.village_id || f.properties?.objectid || "").trim().toLowerCase();
-        return vName === target || vId === target;
+        const vIds = (f.properties?.village_ids || []).map((x) => String(x).trim().toLowerCase());
+        return vName === target || vId === target || vIds.includes(target);
       });
       if (updatedFeature) {
         setSelectedVillageFeature(updatedFeature);
@@ -2382,16 +2495,18 @@ export default function App() {
                     const isSelected =
                       selectedVillage &&
                       String(selectedVillage).trim().toLowerCase() === String(vName).trim().toLowerCase();
+                    const hasIssues = Boolean(feature.properties?.has_issues || (feature.properties?.issues_count > 0));
                     const shares = feature.properties?.party_shares || {};
                     const targetShare = shares[targetParty];
                     const hasData =
                       targetShare !== undefined && targetShare !== null && feature.properties?.votes_polled > 0;
                     const tier = getVotePercentageTier(targetShare, thresholds);
                     return {
-                      color: isSelected ? "#38bdf8" : (hasData ? tier.color : "#475569"),
-                      weight: isSelected ? 3.5 : (hasData ? 2 : 1),
-                      fillColor: hasData ? tier.color : (isSelected ? "#1e293b" : "#1e293b"),
-                      fillOpacity: isSelected ? 0.65 : (hasData ? 0.38 : 0.12),
+                      color: isSelected ? "#38bdf8" : (hasIssues ? "#ef4444" : (hasData ? tier.color : "#475569")),
+                      weight: isSelected ? 3.5 : (hasIssues ? 2.8 : (hasData ? 2 : 1)),
+                      fillColor: hasData ? tier.color : (isSelected ? "#1e293b" : (hasIssues ? "#ef4444" : "#1e293b")),
+                      fillOpacity: isSelected ? 0.65 : (hasIssues ? 0.35 : (hasData ? 0.38 : 0.12)),
+                      dashArray: hasIssues && !isSelected ? "4 3" : "none",
                     };
                   }}
                   onEachFeature={(feature, layer) => {
@@ -2402,8 +2517,17 @@ export default function App() {
                       targetShare !== undefined && targetShare !== null && feature.properties?.votes_polled > 0;
                     const tier = getVotePercentageTier(targetShare, thresholds);
                     const polled = feature.properties?.votes_polled;
+                    const issuesCount = feature.properties?.issues_count || 0;
+                    const issues = feature.properties?.issues || [];
 
                     let tooltipHtml = `<strong>${vName}</strong>`;
+                    if (issuesCount > 0) {
+                      tooltipHtml += `<br/><div style="margin-top:4px;padding:3px 6px;background:rgba(239,68,68,0.2);border:1px solid #ef4444;border-radius:4px;color:#fca5a5;font-weight:600;font-size:11px;">⚠️ ${issuesCount} Issue${issuesCount > 1 ? "s" : ""} Reported</div>`;
+                      if (issues[0]?.feedback) {
+                        const snippet = issues[0].feedback.length > 70 ? issues[0].feedback.substring(0, 67) + "..." : issues[0].feedback;
+                        tooltipHtml += `<div style="font-size:10px;color:#fecaca;margin-top:2px;font-style:italic;">"${snippet}"</div>`;
+                      }
+                    }
                     if (polled) {
                       tooltipHtml += `<br/><small style="color:#94a3b8">Polled: ${polled.toLocaleString("en-IN")}</small>`;
                     }
@@ -2432,10 +2556,13 @@ export default function App() {
                         const isSelected =
                           selectedVillage &&
                           String(selectedVillage).trim().toLowerCase() === String(vName).trim().toLowerCase();
+                        const hasIssues = Boolean(feature.properties?.has_issues || (feature.properties?.issues_count > 0));
                         event.target.setStyle({
-                          color: isSelected ? "#38bdf8" : (hasData ? tier.color : "#475569"),
-                          weight: isSelected ? 3.5 : (hasData ? 2 : 1),
-                          fillOpacity: isSelected ? 0.65 : (hasData ? 0.38 : 0.12),
+                          color: isSelected ? "#38bdf8" : (hasIssues ? "#ef4444" : (hasData ? tier.color : "#475569")),
+                          weight: isSelected ? 3.5 : (hasIssues ? 2.8 : (hasData ? 2 : 1)),
+                          fillColor: hasData ? tier.color : (isSelected ? "#1e293b" : (hasIssues ? "#ef4444" : "#1e293b")),
+                          fillOpacity: isSelected ? 0.65 : (hasIssues ? 0.35 : (hasData ? 0.38 : 0.12)),
+                          dashArray: hasIssues && !isSelected ? "4 3" : "none",
                         });
                       },
                     });
@@ -2469,7 +2596,10 @@ export default function App() {
                   const hasData =
                     targetShare !== undefined && targetShare !== null && feature.properties?.votes_polled > 0;
                   const tier = getVotePercentageTier(targetShare, thresholds);
-                  const markerColor = isSelected ? "#38bdf8" : (hasData ? tier.color : "#64748b");
+                  const issuesCount = feature.properties?.issues_count || 0;
+                  const issues = feature.properties?.issues || [];
+                  const hasIssues = issuesCount > 0;
+                  const markerColor = isSelected ? "#38bdf8" : (hasIssues ? "#ef4444" : (hasData ? tier.color : "#64748b"));
 
                   const markerIcon = L.divIcon({
                     className: "village-location-marker",
@@ -2478,6 +2608,7 @@ export default function App() {
                         <div style="width:30px;height:30px;position:relative;border-radius:50% 50% 50% 0;transform:rotate(-45deg);background:${markerColor};border:3px solid #fff;box-shadow:0 4px 10px rgba(15,23,42,.4);">
                           <span style="position:absolute;width:10px;height:10px;background:#fff;border-radius:50%;top:7px;left:7px;"></span>
                         </div>
+                        ${hasIssues ? `<div style="position:absolute;top:-6px;right:-4px;background:#ef4444;color:#fff;border:1.5px solid #fff;border-radius:10px;font-size:9px;font-weight:700;padding:1px 5px;box-shadow:0 2px 4px rgba(0,0,0,0.5);z-index:10;white-space:nowrap;">⚠️ ${issuesCount}</div>` : ""}
                         <div style="position:absolute;width:10px;height:5px;background:rgba(0,0,0,.22);border-radius:50%;bottom:1px;"></div>
                       </div>
                     `,
@@ -2501,6 +2632,16 @@ export default function App() {
                     >
                       <Tooltip direction="top" offset={[0, -40]} opacity={1}>
                         <strong>{villageName}</strong>
+                        {hasIssues && (
+                          <div style={{ marginTop: "3px", padding: "2px 5px", background: "rgba(239,68,68,0.2)", border: "1px solid #ef4444", borderRadius: "3px", color: "#fca5a5", fontSize: "11px", fontWeight: "600" }}>
+                            ⚠️ ${issuesCount} Issue${issuesCount > 1 ? "s" : ""} Reported
+                            {issues[0]?.feedback && (
+                              <div style={{ fontSize: "10px", color: "#fecaca", fontWeight: "normal", fontStyle: "italic", marginTop: "2px" }}>
+                                "{issues[0].feedback.length > 60 ? issues[0].feedback.substring(0, 57) + "..." : issues[0].feedback}"
+                              </div>
+                            )}
+                          </div>
+                        )}
                         {hasData && (
                           <div style={{ fontSize: "11px", marginTop: "2px" }}>
                             <span
@@ -2820,6 +2961,7 @@ export default function App() {
               tierFilter={tierFilter}
               setTierFilter={setTierFilter}
               tierCounts={scopeTierCounts}
+              featureIssues={selectedVillageFeature?.properties?.issues}
             />
           )}
           {callReportsOpen && selectedState && (

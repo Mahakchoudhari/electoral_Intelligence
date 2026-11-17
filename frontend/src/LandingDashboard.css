@@ -1236,6 +1236,79 @@
   gap: 6px;
 }
 
+.call-item-card.issue-card {
+  background: rgba(239, 68, 68, 0.04);
+  border: 1px solid rgba(239, 68, 68, 0.22);
+}
+
+.call-item-card.issue-card:hover {
+  border-color: rgba(239, 68, 68, 0.45);
+}
+
+.call-feed-search-input {
+  width: 100%;
+  padding: 7px 10px;
+  background: rgba(15, 23, 42, 0.6);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  color: #fff;
+  font-size: 11.5px;
+  outline: none;
+  transition: border-color 0.15s ease;
+}
+
+.call-feed-search-input:focus {
+  border-color: #38bdf8;
+}
+
+.call-remark-container {
+  margin-top: 5px;
+  padding: 5px 8px;
+  background: rgba(255, 255, 255, 0.04);
+  border-left: 3px solid #64748b;
+  border-radius: 3px;
+  font-size: 11.5px;
+  line-height: 1.4;
+}
+
+.call-remark-container.issue-remark {
+  background: rgba(239, 68, 68, 0.1);
+  border-left-color: #ef4444;
+}
+
+.call-remark-label {
+  font-weight: 700;
+  margin-right: 5px;
+  color: #f87171;
+  font-size: 10.5px;
+}
+
+.call-remark-content {
+  color: #f1f5f9;
+  font-style: italic;
+}
+
+.call-map-to-gis-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  padding: 3px 8px;
+  background: rgba(56, 189, 248, 0.1);
+  color: #38bdf8;
+  border: 1px solid rgba(56, 189, 248, 0.3);
+  border-radius: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.call-map-to-gis-btn:hover {
+  background: rgba(56, 189, 248, 0.22);
+  border-color: #38bdf8;
+  color: #fff;
+}
+
 /* ==========================================================================
    Booth Drill-Down Directory Section
    ========================================================================== */
@@ -1660,4 +1733,109 @@
   border-color: #38bdf8;
   color: #fff;
 }
+
+/* Cross-District Assembly Constituency Comparison Styles */
+.ac-comparison-section {
+  background: var(--landing-card-bg);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+  border-radius: 12px;
+  padding: 18px 20px;
+  margin-bottom: 22px;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+
+.ac-comparison-cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(320px, 1fr));
+  gap: 16px;
+}
+
+.ac-compare-card {
+  background: rgba(255, 255, 255, 0.02);
+  border: 1px solid var(--landing-card-border);
+  border-radius: 10px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.ac-compare-card.primary {
+  border-color: rgba(56, 189, 248, 0.35);
+}
+
+.ac-compare-card.secondary {
+  border-color: rgba(168, 85, 247, 0.35);
+}
+
+.ac-compare-card-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.ac-compare-tag {
+  display: inline-block;
+  font-size: 9.5px;
+  font-weight: 750;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  padding: 2px 7px;
+  border-radius: 4px;
+  margin-bottom: 3px;
+}
+
+.ac-compare-tag.primary {
+  color: #38bdf8;
+  background: rgba(56, 189, 248, 0.12);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+}
+
+.ac-compare-tag.secondary {
+  color: #c084fc;
+  background: rgba(168, 85, 247, 0.12);
+  border: 1px solid rgba(168, 85, 247, 0.25);
+}
+
+.ac-compare-metrics-table {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  background: rgba(0, 0, 0, 0.15);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 8px;
+  padding: 10px 12px;
+}
+
+.compare-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 12px;
+  padding: 3px 0;
+  border-bottom: 1px dashed rgba(255, 255, 255, 0.04);
+}
+
+.compare-row:last-child {
+  border-bottom: none;
+}
+
+.compare-metric-name {
+  color: var(--landing-text-muted);
+  font-weight: 500;
+}
+
+.compare-val {
+  color: #f1f5f9;
+  font-weight: 700;
+}
+
+.ac-compare-tier-boxes {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  gap: 8px;
+}
+
 
