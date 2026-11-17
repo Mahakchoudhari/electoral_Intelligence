@@ -826,7 +826,8 @@ async def fetch_filtered_admin_calls(
         conditions.append(
             f"(u.username ILIKE ${idx} OR ss.name ILIKE ${idx} OR ss.phone ILIKE ${idx} "
             f"OR v.name ILIKE ${idx} OR c.summary ILIKE ${idx} OR c.category ILIKE ${idx} "
-            f"OR c.feedback ILIKE ${idx} OR a.name ILIKE ${idx} OR d.name ILIKE ${idx})"
+            f"OR c.feedback ILIKE ${idx} OR a.name ILIKE ${idx} OR d.name ILIKE ${idx} "
+            f"OR CAST(COALESCE(c.ac_no, ss.ac_no) AS text) ILIKE ${idx})"
         )
         params.append(term)
         idx += 1
