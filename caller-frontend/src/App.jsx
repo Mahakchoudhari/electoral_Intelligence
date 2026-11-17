@@ -99,6 +99,109 @@ function downloadCallsCSV(calls, filename) {
   URL.revokeObjectURL(url);
 }
 
+function ReportDonutChart({ data, size = 150, strokeWidth = 24, centerText, subText }) {
+  const total = data.reduce((acc, d) => acc + (d.value || 0), 0);
+  const radius = (size - strokeWidth) / 2;
+  const center = size / 2;
+  const circumference = 2 * Math.PI * radius;
+
+  let accumulatedPercent = 0;
+
+  return (
+    <div className="report-donut-wrap">
+      <div className="report-donut-svg-box" style={{ width: size, height: size, position: "relative" }}>
+        <svg width={size} height={size} viewBox={`0 0 ${size} ${size}`} style={{ transform: "rotate(-90deg)" }}>
+          {total === 0 ? (
+            <circle
+              cx={center}
+              cy={center}
+              r={radius}
+              fill="none"
+              stroke="#e2e8f0"
+              strokeWidth={strokeWidth}
+            />
+          ) : (
+            data.map((item, idx) => {
+              if (!item.value) return null;
+              const pct = (item.value / total) * 100;
+              const dashLength = (pct / 100) * circumference;
+              const dashOffset = -(accumulatedPercent / 100) * circumference;
+              accumulatedPercent += pct;
+              return (
+                <circle
+                  key={idx}
+                  cx={center}
+                  cy={center}
+                  r={radius}
+                  fill="none"
+                  stroke={item.color}
+                  strokeWidth={strokeWidth}
+                  strokeDasharray={`${dashLength} ${circumference}`}
+                  strokeDashoffset={dashOffset}
+                />
+              );
+            })
+          )}
+        </svg>
+        <div className="report-donut-center">
+          <strong>{centerText ?? total}</strong>
+          {subText && <small>{subText}</small>}
+        </div>
+      </div>
+      <div className="report-donut-legend">
+        {data.map((item, idx) => {
+          const pct = total > 0 ? Math.round((item.value / total) * 1000) / 10 : 0;
+          return (
+            <div key={idx} className="report-legend-item">
+              <div className="report-legend-color-name">
+                <span className="report-legend-dot" style={{ background: item.color }} />
+                <span className="report-legend-label">{item.name}</span>
+              </div>
+              <div className="report-legend-val-box">
+                <strong className="report-legend-val">{item.value}</strong>
+                <span className="report-legend-pct">({pct}%)</span>
+              </div>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+function ReportBarChart({ data, maxVal = null, valueLabel = "calls" }) {
+  const max = maxVal || Math.max(1, ...data.map((d) => d.total || d.value || 1));
+  return (
+    <div className="report-barchart-list">
+      {data.map((item, idx) => {
+        const val = item.total ?? item.value ?? 0;
+        const sub = item.issues ?? item.subValue ?? 0;
+        const pct = Math.round((val / max) * 100);
+        return (
+          <div key={idx} className="report-bar-row">
+            <div className="report-bar-meta">
+              <span className="report-bar-label">{item.name || item.label}</span>
+              <span className="report-bar-stats">
+                <strong>{val}</strong> {valueLabel}
+                {sub > 0 && <span className="report-bar-sub">({sub} issues)</span>}
+              </span>
+            </div>
+            <div className="report-bar-track">
+              <div
+                className="report-bar-fill"
+                style={{
+                  width: `${Math.max(2, pct)}%`,
+                  background: item.color || "#2563eb",
+                }}
+              />
+            </div>
+          </div>
+        );
+      })}
+    </div>
+  );
+}
+
 const blankCall = { has_problem: false, summary: "", category: "", feedback: "" };
 const blankSutraForm = {
   name: "",
@@ -185,6 +288,9 @@ export default function CallerDashboard() {
   const [newUserData, setNewUserData] = useState({ username: "", password: "", role: "caller" });
   const [createUserError, setCreateUserError] = useState("");
   const [createUserLoading, setCreateUserLoading] = useState(false);
+  const [showPdfReportModal, setShowPdfReportModal] = useState(false);
+  const [pdfGenerating, setPdfGenerating] = useState(false);
+  const reportPrintRef = useRef(null);
 
   const signOut = useCallback(() => {
     sessionStorage.removeItem("caller-token");
@@ -682,6 +788,117 @@ export default function CallerDashboard() {
       setTimeout(() => setAdminNotice(""), 5000);
     };
 
+    const reportStats = useMemo(() => {
+      const total = callsList.length;
+      let issues = 0;
+      let clear = 0;
+      const catCounts = {};
+      const acCounts = {};
+      const callerCounts = {};
+      const villageSet = new Set();
+      const acSet = new Set();
+
+      for (const c of callsList) {
+        if (c.has_problem) issues += 1;
+        else clear += 1;
+
+        const cat = c.category?.trim() || "General";
+        catCounts[cat] = (catCounts[cat] || 0) + 1;
+
+        const acName = c.assembly_name ? `AC ${c.ac_no || ""} ${c.assembly_name}`.trim() : `AC ${c.ac_no || "General"}`;
+        if (!acCounts[acName]) acCounts[acName] = { name: acName, total: 0, issues: 0 };
+        acCounts[acName].total += 1;
+        if (c.has_problem) acCounts[acName].issues += 1;
+        if (c.ac_no) acSet.add(c.ac_no);
+
+        const callerName = c.caller_username || "Caller";
+        if (!callerCounts[callerName]) callerCounts[callerName] = { name: callerName, total: 0, issues: 0 };
+        callerCounts[callerName].total += 1;
+        if (c.has_problem) callerCounts[callerName].issues += 1;
+
+        if (c.village_name) villageSet.add(c.village_name);
+      }
+
+      const outcomeData = [
+        { name: "Clear / No Issue", value: clear, color: "#10b981" },
+        { name: "Issue Reported", value: issues, color: "#ef4444" },
+      ];
+
+      const catPalette = ["#2563eb", "#f59e0b", "#8b5cf6", "#ec4899", "#06b6d4", "#10b981", "#64748b", "#6366f1"];
+      const categoryData = Object.entries(catCounts)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 6)
+        .map(([name, value], i) => ({
+          name,
+          value,
+          color: catPalette[i % catPalette.length],
+        }));
+
+      const topAcs = Object.values(acCounts)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 7)
+        .map((a) => ({
+          ...a,
+          color: "#2563eb",
+        }));
+
+      const topCallers = Object.values(callerCounts)
+        .sort((a, b) => b.total - a.total)
+        .slice(0, 7)
+        .map((c) => ({
+          ...c,
+          color: "#7c3aed",
+        }));
+
+      return {
+        total,
+        issues,
+        clear,
+        issuePct: total > 0 ? Math.round((issues / total) * 1000) / 10 : 0,
+        clearPct: total > 0 ? Math.round((clear / total) * 1000) / 10 : 0,
+        outcomeData,
+        categoryData,
+        topAcs,
+        topCallers,
+        distinctAcs: acSet.size,
+        distinctVillages: villageSet.size,
+        distinctCallers: Object.keys(callerCounts).length,
+      };
+    }, [callsList]);
+
+    const handleExportPdfFile = async () => {
+      if (!reportPrintRef.current) return;
+      setPdfGenerating(true);
+      try {
+        const html2pdf = (await import("html2pdf.js")).default;
+        const filenameScope = selectedAdminAcs.length
+          ? `ACs_${selectedAdminAcs.join("-")}`
+          : selectedAcObj
+          ? `AC${selectedAcObj.ac_no}`
+          : selectedDistrictObj
+          ? selectedDistrictObj.name.replace(/\s+/g, "_")
+          : "Full";
+
+        const opt = {
+          margin: [8, 8, 8, 8],
+          filename: `EI_Executive_Report_${filenameScope}_${new Date().toISOString().slice(0, 10)}.pdf`,
+          image: { type: "jpeg", quality: 0.98 },
+          html2canvas: { scale: 2, useCORS: true, logging: false },
+          jsPDF: { unit: "mm", format: "a4", orientation: "portrait" },
+          pagebreak: { mode: ["avoid-all", "css", "legacy"] },
+        };
+        await html2pdf().set(opt).from(reportPrintRef.current).save();
+        setAdminNotice("Executive PDF report generated and downloaded successfully.");
+        setTimeout(() => setAdminNotice(""), 5000);
+      } catch (err) {
+        console.error("PDF export error:", err);
+        setAdminNotice("Opening system print dialog as fallback...");
+        window.print();
+      } finally {
+        setPdfGenerating(false);
+      }
+    };
+
     const handleCreateUser = async (e) => {
       e.preventDefault();
       setCreateUserLoading(true);
@@ -753,7 +970,16 @@ export default function CallerDashboard() {
               title="Download filtered calls report as CSV"
               disabled={adminLoading || callsList.length === 0}
             >
-              <span>📥</span> Download Report ({callsList.length})
+              <span>📥</span> Download CSV ({callsList.length})
+            </button>
+            <button
+              onClick={() => setShowPdfReportModal(true)}
+              className="admin-action-btn-primary"
+              title="Generate Executive PDF Report with Pie Charts & Bar Graphs"
+              disabled={adminLoading || callsList.length === 0}
+              style={{ background: "#059669", borderColor: "#059669" }}
+            >
+              <span>📄</span> Export PDF Report
             </button>
             <button
               onClick={() => loadAdminActivity(true)}
@@ -1393,6 +1619,15 @@ export default function CallerDashboard() {
                   >
                     📥 Export CSV
                   </button>
+                  <button
+                    type="button"
+                    className="admin-action-btn-primary"
+                    onClick={() => setShowPdfReportModal(true)}
+                    disabled={callsList.length === 0}
+                    style={{ background: "#059669", borderColor: "#059669" }}
+                  >
+                    📄 Export PDF Report
+                  </button>
                 </div>
               </div>
 
@@ -1727,7 +1962,18 @@ export default function CallerDashboard() {
                   <div className="caller-kicker">AGGREGATED FIELD INTELLIGENCE</div>
                   <h2>Top Categories & Geographic Insights</h2>
                 </div>
-                <span>Calculated over {callsList.length} filtered calls</span>
+                <div style={{ display: "flex", alignItems: "center", gap: "10px" }}>
+                  <span>Calculated over {callsList.length} filtered calls</span>
+                  <button
+                    type="button"
+                    className="admin-action-btn-primary"
+                    onClick={() => setShowPdfReportModal(true)}
+                    disabled={callsList.length === 0}
+                    style={{ background: "#059669", borderColor: "#059669" }}
+                  >
+                    📄 Export PDF Report
+                  </button>
+                </div>
               </div>
 
               <section className="admin-analytics-grid">
@@ -2133,6 +2379,366 @@ export default function CallerDashboard() {
               </div>
             </form>
           </section>
+        </div>
+      )}
+
+      {/* Executive PDF Report Modal with Live Pie Charts & Bar Graphs */}
+      {showPdfReportModal && (
+        <div
+          className="admin-pdf-modal-scrim"
+          role="presentation"
+          onMouseDown={(e) => {
+            if (e.target === e.currentTarget) setShowPdfReportModal(false);
+          }}
+        >
+          <div className="admin-pdf-modal-container">
+            {/* Modal Sticky Toolbar */}
+            <header className="admin-pdf-toolbar">
+              <div className="admin-pdf-toolbar-info">
+                <span className="admin-pdf-toolbar-badge">PDF GENERATOR</span>
+                <h3>Executive Intelligence Report</h3>
+                <span className="admin-pdf-stage-pill">
+                  {hasActiveFilters ? "Custom Filtered Scope" : "Full Scope"} ({callsList.length} calls)
+                </span>
+              </div>
+              <div className="admin-pdf-toolbar-actions">
+                <button
+                  type="button"
+                  className="admin-pdf-btn-download"
+                  onClick={handleExportPdfFile}
+                  disabled={pdfGenerating || callsList.length === 0}
+                >
+                  {pdfGenerating ? (
+                    <>
+                      <span className="pdf-spin">⏳</span> Generating PDF…
+                    </>
+                  ) : (
+                    <>
+                      <span>📥</span> Download PDF
+                    </>
+                  )}
+                </button>
+                <button
+                  type="button"
+                  className="admin-pdf-btn-print"
+                  onClick={() => window.print()}
+                  title="Print or Save via Browser Print Preview"
+                >
+                  <span>🖨️</span> Print via Browser
+                </button>
+                <button
+                  type="button"
+                  className="admin-pdf-btn-close"
+                  onClick={() => setShowPdfReportModal(false)}
+                >
+                  ✕ Close
+                </button>
+              </div>
+            </header>
+
+            {/* Printable Document Preview Area */}
+            <div className="admin-pdf-scroll-area">
+              <div className="admin-pdf-doc" ref={reportPrintRef}>
+                {/* Official Report Document Header */}
+                <header className="report-doc-header">
+                  <div className="report-doc-brand">
+                    <div className="report-logo-badge">EI</div>
+                    <div>
+                      <div className="report-kicker">ELECTORAL INTELLIGENCE SYSTEM</div>
+                      <h1 className="report-title">Executive Field Operations Report</h1>
+                      <div className="report-subtitle">
+                        Ground Outreach & Sampark Sutra Feedback Analysis
+                      </div>
+                    </div>
+                  </div>
+                  <div className="report-meta-box">
+                    <span className="report-confidential-tag">STRICTLY CONFIDENTIAL</span>
+                    <div className="report-meta-row">
+                      <span>Generated:</span>
+                      <strong>{new Date().toLocaleDateString("en-IN", { day: "2-digit", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit" })}</strong>
+                    </div>
+                    <div className="report-meta-row">
+                      <span>Generated By:</span>
+                      <strong>{username || "Admin"}</strong>
+                    </div>
+                    <div className="report-meta-row">
+                      <span>Call Records:</span>
+                      <strong>{callsList.length} Calls</strong>
+                    </div>
+                  </div>
+                </header>
+
+                {/* Filter Scope Summary Card */}
+                <section className="report-section report-scope-section">
+                  <div className="report-section-header">
+                    <h4>Filter Criteria & Report Scope</h4>
+                    <span className="report-scope-type">
+                      {hasActiveFilters ? "Custom Filtered View" : "Full Unfiltered View"}
+                    </span>
+                  </div>
+                  <div className="report-scope-grid">
+                    <div className="report-scope-cell">
+                      <span className="scope-label">Date Window</span>
+                      <strong className="scope-value">
+                        {dateFrom && dateTo
+                          ? `${dateFrom} to ${dateTo}`
+                          : dateFrom
+                          ? `From ${dateFrom}`
+                          : dateTo
+                          ? `Up to ${dateTo}`
+                          : "All Available Dates"}
+                      </strong>
+                    </div>
+                    <div className="report-scope-cell">
+                      <span className="scope-label">District Filter</span>
+                      <strong className="scope-value">
+                        {selectedDistrictObj ? selectedDistrictObj.name : "All Districts"}
+                      </strong>
+                    </div>
+                    <div className="report-scope-cell">
+                      <span className="scope-label">Assembly Constituencies (AC)</span>
+                      <strong className="scope-value">
+                        {selectedAdminAcs.length > 0
+                          ? `${selectedAdminAcs.length} ACs: ${selectedAdminAcs
+                              .map((id) => {
+                                const a = adminAssemblies.find((x) => x.ac_no === id);
+                                return a ? `${a.name} (${id})` : `AC ${id}`;
+                              })
+                              .join(", ")}`
+                          : selectedAcObj
+                          ? `${selectedAcObj.name} (AC ${selectedAcObj.ac_no})`
+                          : "All Assembly Constituencies"}
+                      </strong>
+                    </div>
+                    <div className="report-scope-cell">
+                      <span className="scope-label">Caller Outreach</span>
+                      <strong className="scope-value">
+                        {selectedCallerObj ? selectedCallerObj.username : "All Active Callers"}
+                      </strong>
+                    </div>
+                    <div className="report-scope-cell">
+                      <span className="scope-label">Call Outcome Scope</span>
+                      <strong className="scope-value">
+                        {adminProblemFilter === "issues"
+                          ? "Issues Flagged Only"
+                          : adminProblemFilter === "clear"
+                          ? "Clear / No Issues Only"
+                          : "All Outcomes (Clear & Issues)"}
+                      </strong>
+                    </div>
+                    <div className="report-scope-cell">
+                      <span className="scope-label">Search Query</span>
+                      <strong className="scope-value">
+                        {debouncedAdminSearch ? `"${debouncedAdminSearch}"` : "None"}
+                      </strong>
+                    </div>
+                  </div>
+                </section>
+
+                {/* KPI Metrics Summary Grid */}
+                <section className="report-section">
+                  <div className="report-kpi-grid">
+                    <div className="report-kpi-card">
+                      <span className="kpi-label">TOTAL CALLS</span>
+                      <span className="kpi-value">{reportStats.total}</span>
+                      <span className="kpi-note">100% of filtered scope</span>
+                    </div>
+                    <div className="report-kpi-card issue-kpi">
+                      <span className="kpi-label">ISSUES REPORTED</span>
+                      <span className="kpi-value text-red">{reportStats.issues}</span>
+                      <span className="kpi-note">{reportStats.issuePct}% of calls flagged</span>
+                    </div>
+                    <div className="report-kpi-card clear-kpi">
+                      <span className="kpi-label">CLEAR / NO ISSUES</span>
+                      <span className="kpi-value text-green">{reportStats.clear}</span>
+                      <span className="kpi-note">{reportStats.clearPct}% verified clean</span>
+                    </div>
+                    <div className="report-kpi-card">
+                      <span className="kpi-label">ACS COVERED</span>
+                      <span className="kpi-value">{reportStats.distinctAcs}</span>
+                      <span className="kpi-note">Constituencies in scope</span>
+                    </div>
+                    <div className="report-kpi-card">
+                      <span className="kpi-label">VILLAGES CONTACTED</span>
+                      <span className="kpi-value">{reportStats.distinctVillages}</span>
+                      <span className="kpi-note">Grassroots footprints</span>
+                    </div>
+                    <div className="report-kpi-card">
+                      <span className="kpi-label">CALLERS ACTIVE</span>
+                      <span className="kpi-value">{reportStats.distinctCallers}</span>
+                      <span className="kpi-note">Field operators</span>
+                    </div>
+                  </div>
+                </section>
+
+                {/* Visual Analytics: Pie Charts & Bar Graphs */}
+                <section className="report-section report-charts-section">
+                  <div className="report-section-header">
+                    <h4>Visual Analytics & Performance Breakdown</h4>
+                    <span className="report-note">Charts adapt automatically to any custom stage</span>
+                  </div>
+
+                  <div className="report-charts-grid">
+                    {/* Pie Chart 1: Outcome Breakdown */}
+                    <div className="report-chart-card">
+                      <div className="report-chart-header">
+                        <h5>Call Outcome Ratio (Pie Chart)</h5>
+                        <span>Clear vs Issues</span>
+                      </div>
+                      <ReportDonutChart
+                        data={reportStats.outcomeData}
+                        size={140}
+                        strokeWidth={22}
+                        centerText={reportStats.total}
+                        subText="calls"
+                      />
+                    </div>
+
+                    {/* Pie Chart 2: Feedback Categories Breakdown */}
+                    <div className="report-chart-card">
+                      <div className="report-chart-header">
+                        <h5>Feedback & Issue Categories (Pie Chart)</h5>
+                        <span>Top focus topics</span>
+                      </div>
+                      {reportStats.categoryData.length > 0 ? (
+                        <ReportDonutChart
+                          data={reportStats.categoryData}
+                          size={140}
+                          strokeWidth={22}
+                          centerText={reportStats.categoryData.length}
+                          subText="categories"
+                        />
+                      ) : (
+                        <div className="report-empty-chart">No category data recorded</div>
+                      )}
+                    </div>
+
+                    {/* Bar Graph 1: Assembly Constituency Breakdown */}
+                    <div className="report-chart-card">
+                      <div className="report-chart-header">
+                        <h5>Constituency Call Volume (Bar Graph)</h5>
+                        <span>Top ACs by calls logged</span>
+                      </div>
+                      {reportStats.topAcs.length > 0 ? (
+                        <ReportBarChart
+                          data={reportStats.topAcs}
+                          valueLabel="calls"
+                        />
+                      ) : (
+                        <div className="report-empty-chart">No AC data in current view</div>
+                      )}
+                    </div>
+
+                    {/* Bar Graph 2: Caller Performance Breakdown */}
+                    <div className="report-chart-card">
+                      <div className="report-chart-header">
+                        <h5>Caller Outreach Activity (Bar Graph)</h5>
+                        <span>Top operators by volume</span>
+                      </div>
+                      {reportStats.topCallers.length > 0 ? (
+                        <ReportBarChart
+                          data={reportStats.topCallers}
+                          valueLabel="calls"
+                        />
+                      ) : (
+                        <div className="report-empty-chart">No caller data in current view</div>
+                      )}
+                    </div>
+                  </div>
+                </section>
+
+                {/* Filtered Calls Ledger Table */}
+                <section className="report-section report-table-section">
+                  <div className="report-section-header">
+                    <h4>Detailed Call Records Ledger</h4>
+                    <span className="report-table-count">
+                      {callsList.length > 100
+                        ? `Displaying first 100 of ${callsList.length} records (Export CSV for complete ledger)`
+                        : `${callsList.length} records`}
+                    </span>
+                  </div>
+
+                  {callsList.length > 0 ? (
+                    <div className="report-table-wrapper">
+                      <table className="report-table">
+                        <thead>
+                          <tr>
+                            <th>#</th>
+                            <th>Date & Time</th>
+                            <th>Caller</th>
+                            <th>Location (AC / Village)</th>
+                            <th>Sampark Sutra</th>
+                            <th>Status</th>
+                            <th>Category</th>
+                            <th>Summary / Notes</th>
+                          </tr>
+                        </thead>
+                        <tbody>
+                          {callsList.slice(0, 100).map((call, idx) => (
+                            <tr key={call.report_id || idx}>
+                              <td className="col-idx">{idx + 1}</td>
+                              <td className="col-date">
+                                <div><b>{call.work_date}</b></div>
+                                <small>{call.call_time}</small>
+                              </td>
+                              <td className="col-caller">
+                                <strong>{call.caller_username || "—"}</strong>
+                              </td>
+                              <td className="col-loc">
+                                <div>{call.assembly_name ? `AC ${call.ac_no || ""} ${call.assembly_name}` : "—"}</div>
+                                <small>{[call.village_name, call.district_name].filter(Boolean).join(" · ")}</small>
+                              </td>
+                              <td className="col-contact">
+                                <div><b>{call.sampark_sutra_name || "Unknown"}</b></div>
+                                {call.sampark_sutra_phone && (
+                                  <small>{call.sampark_sutra_phone}</small>
+                                )}
+                              </td>
+                              <td className="col-status">
+                                <span
+                                  className={`report-status-badge ${
+                                    call.has_problem ? "badge-issue" : "badge-clear"
+                                  }`}
+                                >
+                                  {call.has_problem ? "Issue" : "Clear"}
+                                </span>
+                              </td>
+                              <td className="col-cat">
+                                {call.category || "General"}
+                              </td>
+                              <td className="col-feedback">
+                                {call.summary && <div className="report-summary-text">{call.summary}</div>}
+                                {call.feedback && (
+                                  <div className="report-feedback-text">
+                                    <em>Note:</em> {call.feedback}
+                                  </div>
+                                )}
+                                {!call.summary && !call.feedback && <span className="report-empty-text">—</span>}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  ) : (
+                    <div className="report-empty-chart">No calls recorded matching this filter.</div>
+                  )}
+                </section>
+
+                {/* Report Sign-off & Verification Footer */}
+                <footer className="report-doc-footer">
+                  <div className="report-doc-footer-left">
+                    <p><b>Electoral Intelligence Command Platform</b></p>
+                    <small>Official executive briefing document. Confidential and privileged.</small>
+                  </div>
+                  <div className="report-doc-footer-right">
+                    <span>Generated on {new Date().toISOString().slice(0, 10)}</span>
+                    <small>Digital Executive Copy</small>
+                  </div>
+                </footer>
+              </div>
+            </div>
+          </div>
         </div>
       )}
     </main>
