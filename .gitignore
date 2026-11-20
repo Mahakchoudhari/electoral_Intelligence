@@ -62,3 +62,6 @@ INDIA/*
 # Local analysis workbooks
 *.xlsx
 *.xls
+
+# Offline assets, one-off scripts, and raw source GIS/CSV data
+offline_assets/
