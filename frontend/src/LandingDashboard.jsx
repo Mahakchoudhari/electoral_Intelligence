@@ -22,7 +22,9 @@ import {
   IconCircleDot,
   IconSearch,
   IconLogOut,
+  IconSparkles,
 } from "./Icons.jsx";
+import Chatbot from "./Chatbot.jsx";
 
 
 const API_URL = (import.meta.env.VITE_API_URL || "").replace(/\/+$/, "");
@@ -693,6 +695,18 @@ export default function LandingDashboard({
             <IconSearch size={14} />
             <span>Search...</span>
             <span className="search-shortcut-pill">⌘K</span>
+          </button>
+
+          {/* Ask AI Agent Trigger Button */}
+          <button
+            type="button"
+            className="search-trigger-btn ai-nav-btn"
+            onClick={() => window.dispatchEvent(new CustomEvent("toggle-electoral-chatbot"))}
+            title="Ask AI Agent about Database (Alt+A)"
+          >
+            <IconSparkles size={14} className="chatbot-sparkle-anim" />
+            <span>Ask AI</span>
+            <span className="search-shortcut-pill">⌥A</span>
           </button>
 
           <button
@@ -2049,6 +2063,24 @@ export default function LandingDashboard({
           </button>
         </section>
       </main>
+
+      {/* AI Assistant Chatbot */}
+      <Chatbot
+        selectedAC={selectedAC}
+        selectedDistrictCode={selectedDistrictCode}
+        selectedElectionYear={electionYear}
+        onSelectAC={(ac) => {
+          setSelectedAC(String(ac));
+          const match = constituencies.find((c) => c.ac_no === String(ac));
+          if (match && match.district_code) {
+            setSelectedDistrictCode(match.district_code);
+          }
+        }}
+        onSelectDistrict={(dist) => {
+          setSelectedDistrictCode(String(dist));
+          setSelectedAC("");
+        }}
+      />
     </div>
   );
 }

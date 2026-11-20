@@ -13,6 +13,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field, model_validator
 
 from .graphql import graphql_router
+from .agent_router import agent_router
 
 @asynccontextmanager
 async def lifespan(application: FastAPI):
@@ -81,6 +82,7 @@ app.add_middleware(
 )
 
 app.include_router(graphql_router, prefix="/graphql")
+app.include_router(agent_router, prefix="/api/agent", tags=["AI Agent"])
 
 
 class LoginIn(BaseModel):
