@@ -325,6 +325,18 @@
   font-weight: 700;
 }
 
+.ai-nav-btn {
+  background: rgba(2, 132, 199, 0.15);
+  border-color: rgba(56, 189, 248, 0.35);
+  color: #bae6fd;
+}
+
+.ai-nav-btn:hover {
+  background: rgba(2, 132, 199, 0.28);
+  border-color: #38bdf8;
+  color: #ffffff;
+}
+
 /* Matchup / Comparison Select (RLD vs X) */
 .landing-matchup-select-wrap {
   display: inline-flex;
